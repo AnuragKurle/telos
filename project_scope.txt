@@ -1,0 +1,350 @@
+# Telos - Product Scope
+## Vision: Personal AI work diary that captures your day with granular detail
+
+---
+
+## CURRENT STATE (v0.4 - Personal Use)
+
+### What Works
+- Screenshot capture every 30s with idle detection
+- Gemini Vision analysis (basic categorization)
+- Session building + AI enrichment
+- Daily summaries with productivity scores
+- TUI dashboard + email reports
+- Windows Service (daemon mode)
+
+### Prompt Locations (for iteration)
+```
+core/analyzer.py:79-98       → Screenshot analysis (category, app, task)
+core/session_builder.py:209  → Session enrichment (summary, learnings, focus)
+core/daily_aggregator.py:176 → Daily narrative generation
+core/goal_manager.py:103     → Goal context injection
+```
+
+---
+
+## PHASE 5: RICH CAPTURE & AI CHAT ✓ COMPLETE
+
+### ✓ Rich Context Extraction - DONE
+Enhanced screenshot analysis now captures:
+- File names, cursor positions, browser URLs
+- Full descriptions of what user is doing
+- Progress tracking between captures
+- AI observations and patterns
+- Dynamic categories with custom emojis/colors
+
+### ✓ AI Chat Interface - DONE
+Interactive TUI chat screen (press 'A') that enables:
+- Natural language queries: "What did I work on yesterday?"
+- Content generation: "Generate a LinkedIn post about building this app"
+- Insight extraction: "What have I learned this week?"
+- Marketing hook: "Your AI work journal - remember everything you did"
+
+### Implementation Complete
+1. ✓ Created `prompts/` folder with editable templates
+2. ✓ Expanded analyzer prompt for rich extraction
+3. ✓ Store context in `detailed_context` column (JSON blob)
+4. ✓ Built query engine for searching captures/sessions
+5. ✓ Integrated Gemini API for chat responses
+6. ✓ Added ChatScreen to TUI with keyboard navigation
+
+### Technical Details
+- `core/query_engine.py` - Searches and formats context for LLM
+- `tui/screens/chat.py` - Interactive chat UI
+- Smart date range detection (auto-adjusts based on query)
+- Searches 7-365 days of activity data
+- Markdown-formatted responses
+
+---
+
+## PHASE 6: ONBOARDING & PRIVACY
+
+### First-Time User Flow
+```
+1. Welcome screen explaining what the app does
+2. Privacy notice (CRITICAL):
+   - Screenshots are DELETED immediately after analysis
+   - Data stored ONLY locally on your device
+   - Nothing sent to any server except Gemini API
+   - No cloud sync, no accounts, no tracking
+3. API key setup (Gemini)
+4. Email setup (optional)
+5. Goal selection (productivity/learning/custom)
+6. Start tracking
+```
+
+### Privacy Guarantees (must be visible)
+- Screenshots deleted within 5 seconds of capture
+- Database is local SQLite (user controls the file)
+- No telemetry, no analytics, no phone home
+- Open source (users can verify)
+- Data export available (own your data)
+
+### Config: Add privacy settings
+```yaml
+privacy:
+  delete_screenshots_immediately: true  # Cannot be changed
+  local_only: true                      # No cloud features
+  show_privacy_reminder: true           # Startup reminder
+```
+
+---
+
+## PHASE 7: DEPLOYMENT & DISTRIBUTION
+
+### Packaging Options
+1. **PyInstaller EXE** (Windows) - Single executable
+2. **MSI Installer** (Windows) - Proper install/uninstall
+3. **GitHub Releases** - Direct download
+
+### Trial System (Simple)
+```yaml
+trial:
+  enabled: true
+  code: ""  # Enter activation code
+  days_remaining: 7  # Free trial
+```
+
+- First 7 days free (no code needed)
+- After trial: Enter code to continue
+- Codes distributed via Product Hunt, early access list
+- Future: Simple license key system (Gumroad/Paddle)
+
+### Pricing Thoughts
+- Free tier: 7-day trial
+- Lifetime license: $29-49 one-time
+- No subscriptions (aligns with privacy-first messaging)
+
+---
+
+## PHASE 8: USER FEEDBACK & ITERATION
+
+### Feedback Collection (Privacy-Respecting)
+1. **In-app feedback form** → Opens email client with template
+2. **Discord community** → Link in app
+3. **GitHub Issues** → For technical feedback
+4. **Optional analytics** (opt-in only):
+   - Anonymous usage stats (feature usage counts)
+   - Crash reports (no personal data)
+
+### Early Access Program
+1. Share on Twitter/X with waitlist
+2. Product Hunt launch
+3. Give codes to first 100 signups
+4. Collect feedback, iterate, repeat
+
+---
+
+## FUTURE PLANS (NOT NOW)
+
+### Local LLM Processing (Phase 9+)
+- Use Ollama/LLaMA for offline analysis
+- No API costs, complete privacy
+- Slower but free
+- Config option: `llm: local` vs `llm: gemini`
+
+### Cross-Platform (Phase 10+)
+- Linux: systemd service
+- macOS: launchd agent
+- Mobile companion app (view only)
+
+### Web Dashboard (Phase 11+)
+- Optional local web UI (localhost only)
+- Charts, trends, search
+- Still fully local
+
+---
+
+## PRODUCT HUNT LAUNCH CHECKLIST
+
+### Before Launch
+- [ ] Polish onboarding flow
+- [ ] Add rich capture (Phase 5)
+- [ ] Create landing page
+- [ ] Record demo video (30s)
+- [ ] Write compelling copy:
+  - "Your AI work journal"
+  - "Remember everything you did"
+  - "Privacy-first: data never leaves your device"
+- [ ] Prepare activation codes (100+)
+
+### Launch Day
+- [ ] Post on Product Hunt
+- [ ] Tweet/share announcement
+- [ ] Monitor feedback
+- [ ] Respond to comments quickly
+
+### Success Metrics
+- 500+ upvotes on Product Hunt
+- 100+ downloads first week
+- 20+ pieces of feedback
+- 5+ testimonials
+
+---
+
+## CURRENT STATUS - December 31, 2024
+
+**App State:** Feature-complete MVP, ready for daily use
+
+**Phases Complete:** 5/7 (71%)
+- ✅ Phase 1: Core Foundation (100%)
+- ✅ Phase 2: TUI Interface (100%)
+- ✅ Phase 3: Intelligence Layer (100%)
+- ⏳ Phase 4: Production Ready (60% - missing export, error handling, perf)
+- ✅ Phase 5: Rich Capture & AI Chat (100%)
+- ⏳ Phase 6: Onboarding & Privacy (0%)
+- ⏳ Phase 7: Deployment & Distribution (0%)
+
+**What Works RIGHT NOW:**
+- Track your work with AI-powered analysis
+- Press 'A' to chat with your data
+- Generate LinkedIn posts, tweets, work logs
+- Email reports sent daily at 9 PM
+- Windows Service for background tracking
+- All prompts editable in `prompts/` folder
+
+**See CURRENT_STATUS.md for detailed progress and next steps!**
+
+---
+
+## IMMEDIATE NEXT STEPS (Choose Your Path)
+
+### Path A: Complete Phase 4 (10-14 hours)
+**Goal:** Polish existing features before adding new ones
+
+1. **Export Functionality** (4-6 hours)
+   - Create `core/exporter.py`
+   - Add CLI command: `python main.py export --format csv --days 7`
+   - Support CSV (sessions), JSON (raw data), PDF (summaries)
+
+2. **Advanced Error Handling** (3-4 hours)
+   - Retry logic with exponential backoff in `core/analyzer.py`
+   - Graceful degradation when API quota exceeded
+   - Better error messages in TUI workers
+
+3. **Performance Optimization** (3-4 hours)
+   - Query caching in `core/query_engine.py`
+   - Lazy loading in timeline/summary screens
+   - Database query optimization review
+
+---
+
+### Path B: Dogfood & Iterate (Recommended - 1-2 weeks)
+**Goal:** Use the app daily and fix real issues
+
+1. **Week 1: Daily Usage**
+   - Track your work every day
+   - Use AI Chat to generate content
+   - Note bugs, UX issues, missing features
+
+2. **Week 2: Fix & Polish**
+   - Fix the most annoying bugs
+   - Improve prompts based on real usage
+   - Customize AI Chat for your workflow
+   - Generate marketing content from your own data
+
+**Benefits:**
+- Find real issues before public launch
+- Create authentic marketing content
+- Validate product-market fit
+- Better understand user needs
+
+---
+
+### Path C: Launch Preparation (8-11 hours)
+**Goal:** Prepare for public release (Phase 6)
+
+1. **Onboarding Flow** (4-5 hours)
+   - Create `tui/screens/welcome.py` - Welcome screen
+   - Improve setup wizard (API key, email, goals)
+   - Add interactive tutorial
+
+2. **Privacy UI** (2-3 hours)
+   - Create `tui/screens/privacy.py` - Privacy notice
+   - Add "About" screen with privacy guarantees
+   - Show privacy reminder on first launch
+
+3. **Polish TUI** (2-3 hours)
+   - Remove "NEW" banner after first use
+   - Add keyboard shortcut hints
+   - Improve error messages
+
+---
+
+## RECOMMENDED WORKFLOW
+
+**Option 1: Start Using It NOW (Best)**
+```bash
+# 1. Use the app for 2 weeks
+python main.py
+
+# 2. Press 'A' to test AI Chat
+# Ask: "Generate a LinkedIn post about building this app"
+
+# 3. Customize prompts based on usage
+# Edit: prompts/ai_chat_system.txt
+
+# 4. Generate real marketing content
+# LinkedIn posts, tweets, blog drafts from your data
+
+# 5. Fix issues you encounter
+# Create GitHub issues or fix immediately
+```
+
+**Option 2: Polish for Launch**
+```bash
+# 1. Complete export functionality (4-6 hours)
+# 2. Add onboarding flow (4-5 hours)
+# 3. Privacy UI (2-3 hours)
+# 4. Test with fresh users
+# 5. Launch on Product Hunt
+```
+
+---
+
+## FILE STRUCTURE UPDATE
+
+```
+Telos/
+├── prompts/                    # NEW: Editable prompt templates
+│   ├── screenshot_analysis.txt
+│   ├── session_enrichment.txt
+│   └── daily_summary.txt
+├── core/
+│   ├── analyzer.py             # Loads from prompts/
+│   ├── rich_capture.py         # NEW: Enhanced context extraction
+│   └── ...
+├── onboarding/                 # NEW: First-time user experience
+│   ├── welcome.py
+│   ├── privacy_notice.py
+│   └── setup_wizard.py
+└── ...
+```
+
+---
+
+## MARKETING POSITIONING
+
+**Tagline**: "Your AI work journal - remember everything you did"
+
+**Key Messages**:
+1. Privacy-first: Screenshots deleted instantly, data stays local
+2. AI-powered: Understands what you're doing, not just time tracking
+3. Actionable: Chat with your work history, find exactly what you did
+4. Lightweight: Runs silently, doesn't slow you down
+
+**Target Audience**:
+- Developers who want to track their coding sessions
+- Remote workers needing activity logs
+- Anyone who says "what did I do yesterday?"
+- Privacy-conscious productivity enthusiasts
+
+---
+
+## NOTES
+
+- Keep it simple - don't over-engineer
+- Ship fast, iterate based on feedback
+- Privacy is the differentiator
+- "Chat with data" is the killer feature - prioritize this
+- Local-first is a feature, not a limitation

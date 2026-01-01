@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Configuration (Sensitive data)
+config.yaml
+.env
+
+# Database
+*.db
+*.sqlite3
+
+# Temporary files
+temp_screenshots/
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+
+# OS specific
+nul
+

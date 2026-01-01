@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(dir:*)",
+      "Bash(cat:*)",
+      "Bash(git -C \"D:\\\\Experiments\\\\screentracker\" log --oneline -10)",
+      "Bash(python -m py_compile:*)",
+      "Bash(tree /F /A \"D:\\\\Experiments\\\\screentracker\")",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(python -m tui.app:*)",
+      "Bash(timeout 3 python:*)",
+      "Bash(python:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout 5 python:*)",
+      "Bash(ls:*)",
+      "Bash(del:*)",
+      "Bash(sqlite3:*)",
+      "Bash(echo:*)"
+    ]
+  }
+}
