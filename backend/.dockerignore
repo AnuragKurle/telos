@@ -1,0 +1,17 @@
+# Don't include these in Docker image
+node_modules/
+npm-debug.log
+.env
+.env.local
+.git/
+.gitignore
+README.md
+.dockerignore
+Dockerfile
+.vscode/
+.idea/
+*.log
+test/
+tests/
+coverage/
+

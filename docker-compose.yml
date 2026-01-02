@@ -1,0 +1,86 @@
+# Telos - Local Development Environment
+# Run both backend and supporting services together
+
+version: '3.8'
+
+services:
+  # Node.js Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: telos-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GEMINI_SECRET_NAME=${GEMINI_SECRET_NAME:-GEMINI_API_KEY}
+      - LOG_LEVEL=debug
+    volumes:
+      # Mount source for hot reload (nodemon)
+      - ./backend/src:/app/src:ro
+      # Shared API contracts
+      - ./shared:/app/shared:ro
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Firestore Emulator (for local development without GCP costs)
+  firestore-emulator:
+    image: google/cloud-sdk:latest
+    container_name: telos-firestore-emulator
+    command: >
+      gcloud emulators firestore start
+      --host-port=0.0.0.0:8081
+      --project=${FIREBASE_PROJECT_ID:-telos-dev}
+    ports:
+      - "8081:8081"  # Firestore emulator
+      - "4000:4000"  # Emulator UI (optional)
+    environment:
+      - FIRESTORE_PROJECT_ID=${FIREBASE_PROJECT_ID:-telos-dev}
+    volumes:
+      - firestore-data:/opt/data
+    restart: unless-stopped
+
+# Volumes for persistent data
+volumes:
+  firestore-data:
+    driver: local
+
+# Networks (optional, for explicit networking)
+networks:
+  default:
+    name: telos-network
+    driver: bridge
+
+# Usage Instructions:
+# 
+# 1. Start all services:
+#    docker-compose up -d
+#
+# 2. View logs:
+#    docker-compose logs -f backend
+#
+# 3. Stop all services:
+#    docker-compose down
+#
+# 4. Rebuild after code changes:
+#    docker-compose up -d --build backend
+#
+# 5. Use Firestore emulator:
+#    Set FIRESTORE_EMULATOR_HOST=localhost:8081 in backend/.env
+#
+# 6. Access services:
+#    Backend API: http://localhost:8080
+#    Firestore UI: http://localhost:4000
+#    Health check: http://localhost:8080/health
+

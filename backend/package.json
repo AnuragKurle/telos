@@ -1,0 +1,35 @@
+{
+  "name": "telos-backend",
+  "version": "0.1.0",
+  "description": "Telos backend API - handles screenshot analysis via Gemini",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "telos",
+    "productivity",
+    "screenshot-analysis"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "firebase-admin": "^12.0.0",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "@google-cloud/secret-manager": "^5.0.0",
+    "@google-cloud/firestore": "^7.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

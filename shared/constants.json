@@ -1,0 +1,59 @@
+{
+  "api_version": "v1",
+  "min_client_version": "0.1.0",
+  
+  "categories": {
+    "Productive": {
+      "emoji": "💼",
+      "color": "#10B981",
+      "description": "Work-related activities, coding, writing, design"
+    },
+    "Communication": {
+      "emoji": "💬",
+      "color": "#3B82F6",
+      "description": "Email, chat, video calls, messaging"
+    },
+    "Research": {
+      "emoji": "📚",
+      "color": "#8B5CF6",
+      "description": "Reading documentation, learning, browsing information"
+    },
+    "Entertainment": {
+      "emoji": "🎬",
+      "color": "#F59E0B",
+      "description": "Videos, music, streaming, casual browsing"
+    },
+    "Distraction": {
+      "emoji": "🎮",
+      "color": "#EF4444",
+      "description": "Social media, games, non-productive activities"
+    },
+    "System": {
+      "emoji": "⚙️",
+      "color": "#6B7280",
+      "description": "System settings, file management, updates"
+    },
+    "Uncategorized": {
+      "emoji": "❓",
+      "color": "#9CA3AF",
+      "description": "Unable to categorize activity"
+    }
+  },
+  
+  "rate_limits": {
+    "per_hour": 100,
+    "per_day": 2000
+  },
+  
+  "upload_limits": {
+    "max_file_size_mb": 10,
+    "allowed_formats": ["image/png", "image/jpeg", "image/webp"],
+    "timeout_seconds": 30
+  },
+  
+  "token_expiry": {
+    "id_token_hours": 1,
+    "refresh_token_days": 30
+  }
+}
+

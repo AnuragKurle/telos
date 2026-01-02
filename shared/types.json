@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "AnalysisResult": {
+      "type": "object",
+      "required": [
+        "category",
+        "app",
+        "task",
+        "confidence",
+        "detailed_context",
+        "category_emoji",
+        "category_color",
+        "analysis_version",
+        "timestamp"
+      ],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "Productive",
+            "Communication",
+            "Research",
+            "Entertainment",
+            "Distraction",
+            "System",
+            "Uncategorized"
+          ]
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "detailed_context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "category_emoji": {
+          "type": "string",
+          "pattern": "^[\\u{1F300}-\\u{1F9FF}]$"
+        },
+        "category_color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "analysis_version": {
+          "type": "string",
+          "pattern": "^v\\d+$"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["error", "message", "code"],
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "retry_after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minimum_version": {
+          "type": "string"
+        },
+        "download_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "HealthResponse": {
+      "type": "object",
+      "required": ["status", "service", "version", "timestamp"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "degraded", "error"]
+        },
+        "service": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
+
