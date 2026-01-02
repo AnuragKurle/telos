@@ -12,7 +12,7 @@ capture:
 
 storage:
   database_path: "~/.telos/tracker.db"
-  captures_retention_days: 1
+  captures_retention_days: 365  # Increased for day/week/month views
   sessions_retention_days: 90
 
 display:

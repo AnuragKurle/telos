@@ -20,6 +20,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
+# Set UTF-8 encoding for Windows console
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 # Build configuration
 APP_NAME = "Telos"
 VERSION = "0.1.0-beta"
@@ -54,7 +60,45 @@ HIDDEN_IMPORTS = [
     'win32event',
     'win32service',
     'win32serviceutil',
-    'google.genai',
+]
+
+# Packages to exclude (reduce size dramatically)
+EXCLUDED_MODULES = [
+    # Data science (not needed)
+    'matplotlib',
+    'scipy',
+    'pandas',
+    'numpy.random._examples',
+    
+    # Testing (not needed in production)
+    'tests',
+    'test',
+    'unittest',
+    'pytest',
+    '_pytest',
+    
+    # GUI frameworks (not needed)
+    'tkinter',
+    'PyQt5',
+    'PySide2',
+    
+    # Development tools (not needed)
+    'IPython',
+    'jupyter',
+    'notebook',
+    'docutils',
+    'sphinx',
+    
+    # Google Cloud SDK (too large, we use REST API)
+    'google.cloud',
+    'grpc',
+    'grpcio',
+    
+    # Other large libraries
+    'cv2',
+    'tensorflow',
+    'torch',
+    'sklearn',
 ]
 
 def print_header(message):
@@ -111,6 +155,7 @@ def build_executable():
         "--onefile",                    # Single file executable
         "--windowed",                   # No console window (comment out for debugging)
         "--clean",                      # Clean cache
+        "--strip",                      # Strip debug symbols
         f"--distpath={DIST_DIR}",
         f"--workpath={BUILD_DIR}",
         f"--specpath={CLIENT_DIR}",
@@ -120,7 +165,11 @@ def build_executable():
     if ICON and Path(ICON).exists():
         cmd.extend(["--icon", ICON])
     
-    # Add data files
+    # Exclude unnecessary modules to reduce size
+    for module in EXCLUDED_MODULES:
+        cmd.extend(["--exclude-module", module])
+    
+    # Add data files (only essential ones)
     for src, dest in DATA_FILES:
         src_path = CLIENT_DIR / src
         if src_path.exists():
@@ -198,7 +247,7 @@ Version: {VERSION}
 """
     
     dist_readme = DIST_DIR / "README.txt"
-    dist_readme.write_text(readme_content.strip())
+    dist_readme.write_text(readme_content.strip(), encoding='utf-8')
     print(f"✅ Created {dist_readme}")
 
 def get_exe_size():

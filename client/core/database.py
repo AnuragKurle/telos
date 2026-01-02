@@ -262,6 +262,99 @@ class Database:
             ''', (start_of_day, end_of_day))
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_day_blocks(self, date: datetime, block_minutes: int = 30) -> List[Dict[str, Any]]:
+        """Get activity data aggregated into time blocks for a full day.
+        
+        Args:
+            date: Date to get blocks for
+            block_minutes: Size of each block in minutes (default 30)
+            
+        Returns:
+            List of dicts with structure:
+            [
+                {
+                    'hour': 0,
+                    'block': 0,  # 0 or 1 for 30-min blocks
+                    'start_time': datetime,
+                    'end_time': datetime,
+                    'category_counts': {'work': 5, 'browsing': 2},
+                    'dominant_category': 'work',
+                    'total_captures': 7,
+                    'activity_level': 0.8  # 0.0-1.0
+                },
+                ...
+            ]
+        """
+        start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+        
+        # Get all captures for the day
+        captures = self.get_captures_for_date(date)
+        
+        # Initialize blocks: 24 hours × blocks_per_hour
+        blocks_per_hour = 60 // block_minutes
+        total_blocks = 24 * blocks_per_hour
+        blocks = []
+        
+        for hour in range(24):
+            for block_idx in range(blocks_per_hour):
+                block_start = start_of_day + timedelta(
+                    hours=hour, 
+                    minutes=block_idx * block_minutes
+                )
+                block_end = block_start + timedelta(minutes=block_minutes)
+                
+                blocks.append({
+                    'hour': hour,
+                    'block': block_idx,
+                    'start_time': block_start,
+                    'end_time': block_end,
+                    'category_counts': {},
+                    'dominant_category': None,
+                    'total_captures': 0,
+                    'activity_level': 0.0
+                })
+        
+        # Bucket captures into blocks
+        for capture in captures:
+            ts = capture['timestamp']
+            if isinstance(ts, str):
+                ts = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                if ts.tzinfo:
+                    ts = ts.replace(tzinfo=None)
+            
+            # Calculate which block this capture belongs to
+            delta = ts - start_of_day
+            total_minutes = int(delta.total_seconds() / 60)
+            block_index = total_minutes // block_minutes
+            
+            if 0 <= block_index < total_blocks:
+                block = blocks[block_index]
+                
+                # Use simple_category for consistent bucketing
+                cat = capture.get('simple_category') or self._categorize_activity(capture['category'])
+                
+                block['category_counts'][cat] = block['category_counts'].get(cat, 0) + 1
+                block['total_captures'] += 1
+        
+        # Calculate dominant category and activity level for each block
+        for block in blocks:
+            if block['total_captures'] > 0:
+                # Find dominant category
+                block['dominant_category'] = max(
+                    block['category_counts'].items(), 
+                    key=lambda x: x[1]
+                )[0]
+                
+                # Activity level: captures per minute (max ~2 captures per minute at 30s interval)
+                expected_captures = block_minutes / 0.5  # 30s interval = 2 per minute
+                block['activity_level'] = min(1.0, block['total_captures'] / expected_captures)
+            else:
+                block['dominant_category'] = 'idle'
+                block['activity_level'] = 0.0
+        
+        return blocks
+
     def reset_sessions_for_date(self, date: datetime) -> int:
         """Delete sessions for a date and mark captures as unprocessed.
         

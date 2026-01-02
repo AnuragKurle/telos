@@ -125,6 +125,20 @@ class ActivityWaveform(Widget):
             if 0 <= col_idx < graph_width:
                 buckets[col_idx][cat] = buckets[col_idx].get(cat, 0) + 1
         
+        # Fill gaps: if a bucket is empty but surrounded by activity, interpolate
+        # This prevents visual gaps from 30-second capture intervals
+        for i in range(1, graph_width - 1):
+            if not buckets[i]:  # Empty bucket
+                # Check if previous and next buckets have activity
+                prev_bucket = buckets[i - 1]
+                next_bucket = buckets[i + 1]
+                
+                if prev_bucket and next_bucket:
+                    # Take the dominant category from previous bucket
+                    dom_cat = max(prev_bucket.items(), key=lambda x: x[1])[0]
+                    # Add reduced count to show it's interpolated
+                    buckets[i][dom_cat] = max(1, sum(prev_bucket.values()) // 2)
+        
         lines = []
         
         # 1. Title Line (Row 0)
@@ -134,10 +148,14 @@ class ActivityWaveform(Widget):
         title_line.append(title_str, style="bold #00ddff")
         lines.append(title_line)
 
-        # 2. Padding (Rows 1..2) - Empty
-        # Replacing separator with just empty space to keep vertical alignment of graph bars
-        for _ in range(top_offset - 1):
-            lines.append(Text(""))
+        # 2. Navigation hint
+        nav_hint = "Press V to toggle Day View"
+        nav_line = Text(" " * ((width - len(nav_hint)) // 2))
+        nav_line.append(nav_hint, style="dim italic")
+        lines.append(nav_line)
+        
+        # 3. Padding - Empty line to maintain alignment
+        lines.append(Text(""))
 
         # 3. Heatmap Rows (with side padding)
         expected_density = max(1.0, seconds_per_col / 5.0)
@@ -214,3 +232,4 @@ class ActivityWaveform(Widget):
                 result.append('\n')
                 
         return result
+
