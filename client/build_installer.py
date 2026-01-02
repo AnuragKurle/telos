@@ -213,28 +213,106 @@ def print_summary():
     """Print build summary."""
     print_header("Build Summary")
     
+    installer_path = DIST_DIR / f"TelosSetup-v{VERSION}.exe"
     exe_path = DIST_DIR / f"{APP_NAME}.exe"
+    zip_path = CLIENT_DIR / f"{APP_NAME}-v{VERSION}-Windows.zip"
     
-    if exe_path.exists():
+    if installer_path.exists():
+        size_mb = installer_path.stat().st_size / (1024 * 1024)
+        print(f"✅ Windows Installer created successfully!")
+        print(f"\n📦 Installer:")
+        print(f"   File: {installer_path}")
+        print(f"   Size: {size_mb:.2f} MB")
+        print(f"\n🧪 Testing:")
+        print(f"   1. Run the installer on your machine")
+        print(f"   2. Follow the installation wizard")
+        print(f"   3. Test the installed app")
+        print(f"\n📤 Distribution:")
+        print(f"   1. Upload TelosSetup-v{VERSION}.exe to Google Drive/Dropbox")
+        print(f"   2. Share link with your friend")
+        print(f"   3. They just run it and follow the wizard!")
+        print(f"\n✨ User Experience:")
+        print(f"   • Download TelosSetup.exe")
+        print(f"   • Run it → Installation wizard appears")
+        print(f"   • Installs to Program Files")
+        print(f"   • Creates desktop/start menu shortcuts")
+        print(f"   • Optionally starts with Windows")
+    elif zip_path.exists():
+        size_mb = zip_path.stat().st_size / (1024 * 1024)
+        print(f"✅ Distribution package created (no Inno Setup)")
+        print(f"\n📦 Package:")
+        print(f"   File: {zip_path}")
+        print(f"   Size: {size_mb:.2f} MB")
+        print(f"\n💡 To create a proper installer:")
+        print(f"   1. Install Inno Setup: https://jrsoftware.org/isdl.php")
+        print(f"   2. Run this script again")
+    elif exe_path.exists():
         size_mb = get_exe_size()
-        print(f"✅ Executable created successfully!")
+        print(f"✅ Executable created")
         print(f"\n📦 Output:")
         print(f"   Location: {exe_path}")
         print(f"   Size: {size_mb:.2f} MB")
-        print(f"\n🧪 Testing:")
-        print(f"   cd {DIST_DIR}")
-        print(f"   .\\{APP_NAME}.exe")
-        print(f"\n📤 Distribution:")
-        print(f"   1. Test the .exe locally")
-        print(f"   2. Upload to Google Drive/Dropbox")
-        print(f"   3. Share link with your friend")
-        print(f"   4. Include README.txt with instructions")
-        print("\n💡 Tip: Compress to .zip before sharing")
     else:
-        print("❌ Build failed - executable not found")
+        print("❌ Build failed - no output found")
+
+def create_installer():
+    """Create Windows installer using Inno Setup."""
+    print_header("Creating Windows Installer")
+    
+    # Check if Inno Setup is installed
+    inno_paths = [
+        r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        r"C:\Program Files\Inno Setup 6\ISCC.exe",
+    ]
+    
+    inno_compiler = None
+    for path in inno_paths:
+        if Path(path).exists():
+            inno_compiler = path
+            break
+    
+    if not inno_compiler:
+        print("⚠️  Inno Setup not found - skipping installer creation")
+        print("\n💡 To create a proper installer:")
+        print("   1. Download Inno Setup: https://jrsoftware.org/isdl.php")
+        print("   2. Install it (default location)")
+        print("   3. Run this script again")
+        print("\n📦 For now, creating .zip package instead...")
+        create_distribution_zip()
+        return
+    
+    print(f"✅ Found Inno Setup: {inno_compiler}")
+    
+    # Check if ISS file exists
+    iss_file = CLIENT_DIR / "installer_config.iss"
+    if not iss_file.exists():
+        print(f"❌ Installer config not found: {iss_file}")
+        return
+    
+    # Run Inno Setup compiler
+    print("\nCompiling installer...")
+    try:
+        subprocess.check_call([inno_compiler, str(iss_file)], cwd=CLIENT_DIR)
+        print("✅ Installer created successfully!")
+        
+        # Find the installer
+        installer_name = f"TelosSetup-v{VERSION}.exe"
+        installer_path = DIST_DIR / installer_name
+        
+        if installer_path.exists():
+            size_mb = installer_path.stat().st_size / (1024 * 1024)
+            print(f"\n📦 Installer Details:")
+            print(f"   File: {installer_path}")
+            print(f"   Size: {size_mb:.2f} MB")
+            return installer_path
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Installer creation failed: {e}")
+        print("\n📦 Creating .zip package as fallback...")
+        create_distribution_zip()
 
 def create_distribution_zip():
-    """Create a .zip file for easy distribution."""
+    """Create a .zip file for easy distribution (fallback if no Inno Setup)."""
     print_header("Creating Distribution Package")
     
     import zipfile
@@ -275,8 +353,8 @@ def main():
         # Step 4: Create distribution files
         create_readme()
         
-        # Step 5: Create zip package
-        create_distribution_zip()
+        # Step 5: Create installer (or zip if Inno Setup not available)
+        create_installer()
         
         # Step 6: Print summary
         print_summary()
