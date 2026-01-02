@@ -1,0 +1,321 @@
+"""
+Service Daemon
+
+Lightweight daemon runner for background service mode.
+Runs capture, session building, and email scheduling without TUI dependencies.
+"""
+
+import json
+import time
+import threading
+from datetime import datetime, timedelta
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.database import Database
+    from core.capture import ActivityMonitor, ScreenshotCapture
+    from core.analyzer import GeminiAnalyzer
+    from core.goal_manager import AnalysisGoalManager
+    from core.session_builder import SessionBuilder
+    from core.daily_aggregator import DailyAggregator
+    from core.email_reporter import EmailReporter
+    from utils.hash_utils import ScreenshotHasher
+    from utils.config_manager import ConfigDict
+
+
+class ServiceDaemon:
+    """Manages background workers for service mode."""
+
+    def __init__(
+        self,
+        config: 'ConfigDict',
+        db: 'Database',
+        analyzer: 'GeminiAnalyzer',
+        goal_manager: 'AnalysisGoalManager',
+        capturer: 'ScreenshotCapture',
+        activity_monitor: 'ActivityMonitor',
+        hasher: 'ScreenshotHasher',
+        session_builder: 'SessionBuilder',
+        daily_aggregator: 'DailyAggregator',
+        email_reporter: Optional['EmailReporter'] = None
+    ):
+        """Initialize service daemon.
+
+        Args:
+            config: Configuration dictionary
+            db: Database instance
+            analyzer: Gemini analyzer instance
+            goal_manager: Analysis goal manager instance
+            capturer: Screenshot capture instance
+            activity_monitor: Activity monitor instance
+            hasher: Screenshot hasher instance
+            session_builder: Session builder instance
+            daily_aggregator: Daily aggregator instance
+            email_reporter: Email reporter instance (optional)
+        """
+        self.config = config
+        self.db = db
+        self.analyzer = analyzer
+        self.goal_manager = goal_manager
+        self.capturer = capturer
+        self.activity_monitor = activity_monitor
+        self.hasher = hasher
+        self.session_builder = session_builder
+        self.daily_aggregator = daily_aggregator
+        self.email_reporter = email_reporter
+
+        # Configuration
+        self.capture_interval = config.get('capture', 'interval_seconds', default=30)
+        self.max_daily_requests = config.get('capture', 'max_daily_requests', default=1500)
+        self.session_trigger_hours = config.get('intelligence', 'session_trigger_hours', default=2)
+        self.session_trigger_idle_minutes = config.get('intelligence', 'session_trigger_idle_minutes', default=5)
+        self.session_check_interval = config.get('intelligence', 'check_interval_seconds', default=60)
+        self.max_enrichment_per_trigger = config.get('intelligence', 'max_enrichment_per_trigger', default=3)
+
+        # Email configuration
+        self.email_enabled = config.get('email', 'enabled', default=False)
+        self.email_send_time = config.get('email', 'send_time', default='21:00')
+
+        # State tracking
+        self.running = False
+        self.capture_thread: Optional[threading.Thread] = None
+        self.session_thread: Optional[threading.Thread] = None
+        self.email_thread: Optional[threading.Thread] = None
+        self.last_session_build = datetime.now()
+        self.last_email_date: Optional[str] = None
+
+    def start(self):
+        """Start all daemon workers."""
+        if self.running:
+            print("Service daemon already running")
+            return
+
+        print("Starting service daemon...")
+        self.running = True
+
+        # Start activity monitor
+        self.activity_monitor.start()
+        print("✓ Activity monitor started")
+
+        # Start capture worker
+        self.capture_thread = threading.Thread(target=self._capture_worker, daemon=True)
+        self.capture_thread.start()
+        print("✓ Capture worker started")
+
+        # Start session worker
+        self.session_thread = threading.Thread(target=self._session_worker, daemon=True)
+        self.session_thread.start()
+        print("✓ Session worker started")
+
+        # Start email worker if enabled
+        if self.email_enabled and self.email_reporter:
+            self.email_thread = threading.Thread(target=self._email_worker, daemon=True)
+            self.email_thread.start()
+            print("✓ Email worker started")
+
+        print("✓ Service daemon running")
+
+    def stop(self):
+        """Stop all daemon workers."""
+        print("Stopping service daemon...")
+        self.running = False
+
+        # Stop activity monitor
+        self.activity_monitor.stop()
+
+        # Wait for threads to finish
+        if self.capture_thread and self.capture_thread.is_alive():
+            self.capture_thread.join(timeout=5)
+
+        if self.session_thread and self.session_thread.is_alive():
+            self.session_thread.join(timeout=5)
+
+        if self.email_thread and self.email_thread.is_alive():
+            self.email_thread.join(timeout=5)
+
+        # Cleanup
+        self.capturer.cleanup_all()
+
+        print("✓ Service daemon stopped")
+
+    def _capture_worker(self):
+        """Capture worker loop (runs every 30s)."""
+        print("[Capture Worker] Started")
+
+        while self.running:
+            try:
+                # Check if idle
+                if self.activity_monitor.is_idle():
+                    idle_time = self.activity_monitor.seconds_since_activity()
+                    if idle_time % 60 == 0:  # Log every minute
+                        print(f"[Capture Worker] IDLE - No activity for {idle_time}s")
+                    time.sleep(5)
+                    continue
+
+                # Check API quota
+                api_usage = self.db.get_api_usage_today()
+                if api_usage >= self.max_daily_requests:
+                    if api_usage == self.max_daily_requests:  # Only log once
+                        print(f"[Capture Worker] QUOTA EXCEEDED - {api_usage}/{self.max_daily_requests}")
+                    time.sleep(self.capture_interval)
+                    continue
+
+                # Capture screenshot
+                screenshot_path = self.capturer.capture()
+
+                # Check for duplicates
+                if self.hasher.is_duplicate(screenshot_path):
+                    self.capturer.cleanup_screenshot(screenshot_path)
+                    time.sleep(self.capture_interval)
+                    continue
+
+                # Get previous 2 captures for context (Phase 5)
+                previous_captures = self.db.get_previous_captures(limit=2)
+
+                # Analyze with Gemini (with context)
+                result = self.analyzer.analyze_with_fallback(screenshot_path, previous_captures)
+
+                if result:
+                    # Extract detailed_context
+                    detailed_context = result.get('detailed_context', {})
+                    detailed_context_json = json.dumps(detailed_context) if detailed_context else None
+
+                    # Save to database with detailed_context and AI autonomy fields
+                    self.db.insert_capture(
+                        timestamp=datetime.now(),
+                        category=result['category'],
+                        app_name=result['app'],
+                        task=result['task'],
+                        confidence=result['confidence'],
+                        detailed_context=detailed_context_json,
+                        category_emoji=result.get('category_emoji'),
+                        category_color=result.get('category_color')
+                    )
+
+                    # Increment API usage
+                    self.db.increment_api_usage()
+
+                    print(f"[Capture Worker] Captured: [{result['category']}] {result['app']} - {result['task'][:50]}")
+
+                # Cleanup screenshot
+                self.capturer.cleanup_screenshot(screenshot_path)
+
+                # Wait for next interval
+                time.sleep(self.capture_interval)
+
+            except Exception as e:
+                print(f"[Capture Worker] Error: {e}")
+                time.sleep(self.capture_interval)
+
+        print("[Capture Worker] Stopped")
+
+    def _session_worker(self):
+        """Session worker loop (checks every 60s for triggers)."""
+        print("[Session Worker] Started")
+
+        while self.running:
+            try:
+                time.sleep(self.session_check_interval)
+
+                # Check trigger conditions
+                elapsed_hours = (datetime.now() - self.last_session_build).total_seconds() / 3600
+                idle_minutes = self.activity_monitor.seconds_since_activity() / 60
+
+                trigger_time = elapsed_hours >= self.session_trigger_hours
+                trigger_idle = idle_minutes >= self.session_trigger_idle_minutes
+
+                if not (trigger_time or trigger_idle):
+                    continue
+
+                # Build sessions
+                print(f"[Session Worker] Trigger: {'time' if trigger_time else 'idle'}")
+                session_ids = self.session_builder.build_sessions()
+
+                if not session_ids:
+                    print("[Session Worker] No new sessions")
+                    self.last_session_build = datetime.now()
+                    continue
+
+                print(f"[Session Worker] Built {len(session_ids)} session(s)")
+
+                # Enrich sessions (limit to avoid API quota issues)
+                api_usage = self.db.get_api_usage_today()
+                remaining_quota = self.max_daily_requests - api_usage
+                max_enrich = min(self.max_enrichment_per_trigger, remaining_quota)
+
+                enriched_count = 0
+                for session_id in session_ids[:max_enrich]:
+                    success = self.session_builder.enrich_session_with_retry(session_id)
+                    if success:
+                        self.db.increment_api_usage()
+                        enriched_count += 1
+
+                print(f"[Session Worker] Enriched {enriched_count}/{len(session_ids)} sessions")
+
+                # Update last build time
+                self.last_session_build = datetime.now()
+
+            except Exception as e:
+                print(f"[Session Worker] Error: {e}")
+
+        print("[Session Worker] Stopped")
+
+    def _email_worker(self):
+        """Email worker loop (checks every minute for send time)."""
+        print("[Email Worker] Started")
+
+        while self.running:
+            try:
+                time.sleep(60)  # Check every minute
+
+                now = datetime.now()
+                current_time = now.strftime('%H:%M')
+                current_date = now.strftime('%Y-%m-%d')
+
+                # Check if it's time to send
+                if current_time != self.email_send_time:
+                    continue
+
+                # Check if already sent today
+                if self.last_email_date == current_date:
+                    continue
+
+                print(f"[Email Worker] Sending daily report for {current_date}")
+
+                # Generate summary for today (or use existing)
+                summary = self.db.get_daily_summary(now)
+
+                if not summary:
+                    print("[Email Worker] Generating daily summary...")
+                    summary_id = self.daily_aggregator.generate_daily_summary(now)
+
+                    if summary_id:
+                        self.db.increment_api_usage()
+                        summary = self.db.get_daily_summary(now)
+                    else:
+                        print("[Email Worker] Failed to generate summary (no data?)")
+                        continue
+
+                # Send email
+                success = self.email_reporter.send_daily_report(summary)
+
+                if success:
+                    self.last_email_date = current_date
+                    print(f"[Email Worker] ✓ Daily report sent for {current_date}")
+                else:
+                    print(f"[Email Worker] ✗ Failed to send daily report")
+
+            except Exception as e:
+                print(f"[Email Worker] Error: {e}")
+
+        print("[Email Worker] Stopped")
+
+    def run_forever(self):
+        """Run daemon in foreground (blocks until stopped)."""
+        try:
+            while self.running:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nReceived shutdown signal")
+            self.stop()
+

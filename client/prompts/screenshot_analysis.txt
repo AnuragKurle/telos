@@ -1,0 +1,146 @@
+Analyze this screenshot. You have FULL AUTONOMY to interpret what you see.
+
+## Previous Context
+{previous_context}
+
+## Your Task
+Describe what the user is doing. Use your judgment - you're not constrained to predefined boxes.
+
+## Output Fields
+
+### simple_category (string) - REQUIRED FOR STATISTICS
+You MUST map your activity to ONE of these 5 buckets for dashboard statistics:
+- "work" - Coding, debugging, professional tasks, documentation, meetings, emails, planning
+- "learning" - Tutorials, courses, reading articles, research, educational content
+- "browsing" - Social media, Reddit, news, casual web browsing, chat apps, forums
+- "entertainment" - YouTube, Netflix, games, music streaming, videos, leisure content
+- "idle" - System screens, lock screens, no meaningful activity
+
+⚠️ CRITICAL MAPPING RULES:
+- Social media (Instagram, Twitter, Reddit, Facebook) → "browsing" (NOT work)
+- YouTube watching videos → "entertainment" (unless clearly educational tutorial)
+- Reading tech articles/docs → "learning"
+- GitHub/GitLab code work → "work"
+- General web browsing → "browsing"
+- Casual/NSFW/distraction content → "browsing"
+
+### category (string)
+What is the general category of this activity? (e.g., Debugging, Meeting, Research, Coding, Email, Break, etc.)
+Be specific and autonomous - don't feel limited to a few choices. This is for display purposes.
+
+### category_emoji (string)
+Provide the ACTUAL emoji character (e.g., 📱, 🔧, 📚, ☕) that best represents this specific activity. 
+⚠️ CRITICAL: Return the emoji character itself, NOT a hex code like "u1f4f1".
+
+### category_color (string)
+Provide a hex color code (e.g., "#3498db") that represents this category.
+- Blue/Cyan: Work/Coding
+- Green: Learning/Documentation
+- Yellow/Orange: Communication/Meetings/Social
+- Purple: Creative/Planning
+- Red/Pink: High-intensity/Urgent/Distractions
+- Grey: Idle/System
+
+### app (string, max 50 chars)
+Application name. Include filename if relevant: "VSCode - email_reporter.py"
+
+### task (string, max 80 chars) - KEEP CONCISE
+Short, human-readable description for display. This is what the user sees.
+- GOOD: "fixing SMTP retry logic"
+- GOOD: "reading docs for smtplib"
+
+### confidence (number 0.0-1.0)
+
+### detailed_context (object) - Rich details for analysis
+Include what you observe. This is NOT shown to user directly - used for end-of-day summaries and "chat with data".
+
+Fields (all optional, include what's visible):
+- file_name: Current file being edited (max 100 chars)
+- cursor_position: Line number if visible (max 20 chars)
+- browser_url: Website URL (max 150 chars)
+- full_description: Detailed version of task (max 200 chars) - be VERY specific here. Capture exact function names, variables, or specific sentences the user is reading/writing.
+- progress_from_last: What changed since last capture, based on previous context (max 150 chars)
+- ai_observations: YOUR insights - patterns, concerns, suggestions (max 200 chars)
+- suggested_category: If you think a different category fits better than the common ones
+- confidence_notes: Why your confidence is what it is (max 100 chars)
+
+## AI AUTONOMY
+You have FULL freedom to:
+1. Choose ANY category name that fits.
+2. Choose ANY emoji that represents the work.
+3. Add observations about patterns you notice (frequent tab switching, stuck on problem, etc.)
+4. Capture granular details (like the exact line of code or a specific sentence being typed).
+
+## Output
+Valid JSON only. Keep task CONCISE (≤80 chars). Put details in detailed_context.
+
+## Examples
+
+Example 1 - Coding:
+{
+  "simple_category": "work",
+  "category": "Coding",
+  "category_emoji": "💻",
+  "category_color": "#3498db",
+  "app": "VSCode - database.py",
+  "task": "adding database migration",
+  "confidence": 0.92,
+  "detailed_context": {
+    "file_name": "database.py",
+    "cursor_position": "line 105",
+    "full_description": "adding detailed_context column migration to captures table schema",
+    "progress_from_last": "moved from line 95 to 105, implementing ALTER TABLE",
+    "ai_observations": "focused work session, consistent progress"
+  }
+}
+
+Example 2 - Debugging (Stack Overflow):
+{
+  "simple_category": "learning",
+  "category": "Debugging Research",
+  "category_emoji": "🔍",
+  "category_color": "#27ae60",
+  "app": "Chrome - Stack Overflow",
+  "task": "researching SQLite error",
+  "confidence": 0.85,
+  "detailed_context": {
+    "browser_url": "stackoverflow.com/questions/...",
+    "full_description": "searching for 'sqlite3 column already exists' error solution",
+    "ai_observations": "user switched from code to browser, may be stuck on migration error"
+  }
+}
+
+Example 3 - Social Media:
+{
+  "simple_category": "browsing",
+  "category": "Social Media",
+  "category_emoji": "📱",
+  "category_color": "#e74c3c",
+  "app": "Chrome - Instagram",
+  "task": "scrolling feed",
+  "confidence": 0.95,
+  "detailed_context": {
+    "browser_url": "instagram.com",
+    "full_description": "browsing Instagram feed, looking at photos",
+    "ai_observations": "taking a break from work, social media scrolling"
+  }
+}
+
+Example 4 - Entertainment:
+{
+  "simple_category": "entertainment",
+  "category": "Video Streaming",
+  "category_emoji": "🎬",
+  "category_color": "#ff6b6b",
+  "app": "YouTube",
+  "task": "watching video",
+  "confidence": 0.95,
+  "detailed_context": {
+    "browser_url": "youtube.com",
+    "full_description": "watching music video, appears to be taking a break",
+    "ai_observations": "break after 2 hours of coding (based on previous context)"
+  }
+}
+
+## Output
+Valid JSON only. Keep task CONCISE (≤80 chars). Put details in detailed_context.

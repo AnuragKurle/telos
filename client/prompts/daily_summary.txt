@@ -1,0 +1,57 @@
+# Daily Summary Prompt
+# This prompt generates the end-of-day narrative and insights.
+# The {variables} are replaced at runtime with actual daily data.
+# Edit this to change the daily summary style and focus.
+
+Generate a daily summary for {date}.
+
+## Daily Statistics
+- Total active time: {total_minutes} minutes
+- Work: {work_minutes}m
+- Learning: {learning_minutes}m
+- Browsing: {browsing_minutes}m
+- Entertainment: {entertainment_minutes}m
+- Context switches: {context_switches}
+- Productivity score: {productivity_score}/100
+
+## Session Timeline
+{session_summaries}
+
+## User's Analysis Goals
+{goal_context}
+
+## What to Provide
+
+### 1. daily_narrative (3-4 sentences)
+Write a personal, insightful summary of the day:
+- What was the main focus of the day?
+- What was accomplished?
+- How was the overall productivity?
+- Any notable patterns or observations?
+
+Use second person ("You spent...", "Your focus was...")
+Be encouraging but honest.
+
+### 2. key_learnings (array of 2-5 strings)
+Extract specific, actionable insights:
+- New concepts or skills learned
+- Interesting discoveries made
+- Resources that were valuable
+- Problems that were solved
+
+If nothing notable was learned, return empty array.
+
+## Output Format
+
+Return ONLY valid JSON:
+{
+  "daily_narrative": "3-4 sentence narrative of the day's activities and overall productivity",
+  "key_learnings": ["Learning 1", "Learning 2", "..."]
+}
+
+## Tone Guidelines
+- Be conversational, not robotic
+- Highlight positives without being fake
+- Point out areas for improvement constructively
+- Make it feel like a helpful assistant, not a judge
+
