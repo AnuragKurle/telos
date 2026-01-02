@@ -53,15 +53,43 @@ class DailyAggregator:
             self.db.delete_daily_summary(date)
 
         # Get stats for the day
-        # We need to calculate stats from captures directly for accuracy
-        stats = self.db.get_today_stats() # This actually gets "today" relative to system time
-        # If we are summarizing a past day, we should implement get_stats_for_date in DB
-        # For now, let's assume we run this at end of day or next morning for "yesterday"
+        stats = self.db.get_today_stats() 
         
         # Get sessions
         sessions = self.db.get_sessions_for_date(date)
+        
+        # If no finalized sessions, we can still generate a summary if we have captures
         if not sessions:
-            return None
+            captures = self.db.get_captures_for_date(date)
+            if not captures:
+                return None
+                
+            # Create a simplified "ongoing session" for the AI to analyze
+            start_time = captures[0]['timestamp']
+            end_time = captures[-1]['timestamp']
+            
+            # Heuristic for primary task: most common task in captures
+            tasks = {}
+            for c in captures:
+                t = c['task']
+                tasks[t] = tasks.get(t, 0) + 1
+            primary_task = max(tasks.items(), key=lambda x: x[1])[0] if tasks else "Unknown Activity"
+            
+            # Heuristic for category
+            categories = {}
+            for c in captures:
+                cat = c['category']
+                categories[cat] = categories.get(cat, 0) + 1
+            dominant_cat = max(categories.items(), key=lambda x: x[1])[0] if categories else "Browsing"
+
+            sessions = [{
+                'id': 0, # Pseudo ID
+                'start_time': start_time,
+                'end_time': end_time,
+                'category': dominant_cat,
+                'primary_task': primary_task,
+                'detailed_summary': "This session is currently active and has not been finalized into a formal block yet."
+            }]
             
         # Generate narrative
         narrative_result = self._generate_narrative(date, sessions, stats)
@@ -74,7 +102,8 @@ class DailyAggregator:
                 total_focus += s['focus_score']
                 focus_count += 1
         
-        avg_focus = total_focus / max(1, focus_count)
+        # Default to a neutral productivity score if no focus scores available yet
+        avg_focus = total_focus / max(1, focus_count) if focus_count > 0 else 0.5
         
         # Insert summary
         summary_id = self.db.insert_daily_summary(
@@ -85,9 +114,9 @@ class DailyAggregator:
             entertainment_seconds=stats.get('entertainment', 0),
             idle_seconds=stats.get('idle', 0),
             key_learnings_json=narrative_result['key_learnings_json'],
-            productivity_score=avg_focus, # Proxy for productivity
+            productivity_score=avg_focus, 
             daily_narrative=narrative_result['daily_narrative'],
-            context_switches=len(sessions) # Simple proxy
+            context_switches=max(len(sessions), 1)
         )
         
         return self.db.get_daily_summary(date)

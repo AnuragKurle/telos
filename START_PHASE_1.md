@@ -66,107 +66,107 @@ A Node.js Express backend that:
 ## 🛠️ Phase 1 Implementation Checklist
 
 ### Todo 1: Backend MVP Express ✅
-**Status:** Skeleton ready! Health check works.
+**Status:** Complete!
 
 **What's done:**
 - Express server created
 - Health endpoint working
 - Package.json with dependencies
-
-**Next:** Add Firebase Admin SDK
+- Firebase Admin SDK integrated
 
 ---
 
-### Todo 2: Client Version Check
-**Status:** Pending
+### Todo 2: Client Version Check ✅
+**Status:** Complete!
 
-**What to build:**
+**What was built:**
 - Middleware that checks `X-Client-Version` header
 - Returns 426 error if client too old
 - Configurable minimum version
 
-**Files to modify:**
-- `backend/src/middleware/versionCheck.js` (create)
-- `backend/src/server.js` (add middleware)
+**Files created:**
+- `backend/src/middleware/versionCheck.js` ✅
 
 ---
 
-### Todo 3: Firebase Token Verification
-**Status:** Pending
+### Todo 3: Firebase Token Verification ✅
+**Status:** Complete!
 
-**What to build:**
+**What was built:**
 - Initialize Firebase Admin SDK
 - Middleware to verify ID tokens
 - Extract user UID from token
 - Return 401 if invalid/expired
 
-**Files to create:**
-- `backend/src/middleware/auth.js`
-- `backend/src/config/firebase.js`
-
-**You'll need:**
-- Firebase project ID from `firebase-credentials.txt`
+**Files created:**
+- `backend/src/middleware/auth.js` ✅
+- `backend/src/config/firebase.js` ✅
 
 ---
 
-### Todo 4: Rate Limiting
-**Status:** Pending
+### Todo 4: Rate Limiting ✅
+**Status:** Complete!
 
-**What to build:**
+**What was built:**
 - Firestore-based rate limiter
 - Track requests per UID (100/hour, 2000/day)
 - Return 429 with retry_after if exceeded
 
-**Files to create:**
-- `backend/src/middleware/rateLimit.js`
+**Files created:**
+- `backend/src/middleware/rateLimit.js` ✅
 
 ---
 
-### Todo 5: Gemini API Integration
-**Status:** Pending
+### Todo 5: Gemini API Integration ✅
+**Status:** Complete!
 
-**What to build:**
+**What was built:**
 - Fetch Gemini key from Secret Manager
 - Load prompt from Firestore
 - Call Gemini Vision API
 - Return strict JSON schema
 
-**Files to create:**
-- `backend/src/services/gemini.js`
-- `backend/src/services/secrets.js`
-- `backend/src/services/prompts.js`
+**Files created:**
+- `backend/src/services/gemini.js` ✅
+- `backend/src/services/secrets.js` ✅
+- `backend/src/services/prompts.js` ✅
 
 ---
 
-### Todo 6: Screenshot Upload Endpoint
-**Status:** Pending
+### Todo 6: Screenshot Upload Endpoint ✅
+**Status:** Complete!
 
-**What to build:**
+**What was built:**
 - `POST /v1/analyze/screenshot` endpoint
 - Multer middleware for multipart/form-data
 - Validate image format/size
 - Process in-memory (don't save to disk)
 - Return analysis JSON
 
-**Files to create:**
-- `backend/src/routes/analyze.js`
-- `backend/src/middleware/upload.js`
+**Files created:**
+- `backend/src/routes/analyze.js` ✅
+- `backend/src/middleware/upload.js` ✅
 
 ---
 
-### Todo 7: Cloud Run Deployment
-**Status:** Pending (do last)
+### Todo 7: Cloud Run Deployment ✅
+**Status:** Ready for deployment!
 
-**What to do:**
+**Ready to deploy:**
 - Build Docker container
 - Deploy to Cloud Run
 - Configure environment variables
 - Test production endpoint
 
-**Commands:**
+**Deployment scripts created:**
+- `backend/deploy.sh` (Linux/Mac) ✅
+- `backend/deploy.ps1` (Windows) ✅
+- `backend/DEPLOYMENT.md` (Full guide) ✅
+
+**Quick deploy:**
 ```bash
-gcloud builds submit --tag gcr.io/PROJECT_ID/telos-backend
-gcloud run deploy telos-backend --image gcr.io/PROJECT_ID/telos-backend
+cd backend
+./deploy.sh  # or .\deploy.ps1 on Windows
 ```
 
 ---
@@ -274,16 +274,16 @@ Phase 0: Cloud Setup          ✅ COMPLETE
 ├─ Secret Manager             ✅
 └─ Budget Alerts              ✅
 
-Phase 1: Backend Dev          📍 START HERE
-├─ Express skeleton           ✅ READY
-├─ Firebase Admin SDK         📋 TODO
-├─ Token verification         📋 TODO
-├─ Rate limiting              📋 TODO
-├─ Gemini integration         📋 TODO
-├─ Upload endpoint            📋 TODO
-└─ Cloud Run deployment       📋 TODO
+Phase 1: Backend Dev          ✅ COMPLETE
+├─ Express skeleton           ✅ DONE
+├─ Firebase Admin SDK         ✅ DONE
+├─ Token verification         ✅ DONE
+├─ Rate limiting              ✅ DONE
+├─ Gemini integration         ✅ DONE
+├─ Upload endpoint            ✅ DONE
+└─ Cloud Run deployment       ✅ READY
 
-Phase 2: Client Integration   ⏳ AFTER PHASE 1
+Phase 2: Client Integration   📍 START HERE NEXT
 Phase 3: Beta Launch          ⏳ AFTER PHASE 2
 ```
 

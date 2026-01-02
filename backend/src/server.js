@@ -8,9 +8,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { initializeFirebase } from './config/firebase.js';
+import analyzeRoutes from './routes/analyze.js';
 
 // Load environment variables
 dotenv.config();
+
+// Initialize Firebase Admin SDK
+initializeFirebase();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -39,8 +44,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// API routes will be added here in Phase 1
-// app.use('/v1/analyze', analyzeRoutes);
+// API routes
+app.use('/v1/analyze', analyzeRoutes);
 
 // 404 handler
 app.use((req, res) => {

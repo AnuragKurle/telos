@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "setup": "node setup-firestore-prompts.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

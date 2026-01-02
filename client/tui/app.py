@@ -27,6 +27,7 @@ class TelosApp(App):
     current_color: reactive[str] = reactive("#95a5a6")
     current_app: reactive[str] = reactive("None")
     current_task: reactive[str] = reactive("No activity")
+    last_analysis_source: reactive[str] = reactive("none")  # backend, local, none
     activity_start_time: reactive[Optional[datetime]] = reactive(None)
 
     # Today's stats (in seconds)

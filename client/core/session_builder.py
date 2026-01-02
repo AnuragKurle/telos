@@ -93,12 +93,34 @@ class SessionBuilder:
         # Handle the remaining captures
         if current_session_captures:
             last_capture_time = datetime.fromisoformat(current_session_captures[-1]['timestamp'])
-            if datetime.now() - last_capture_time > self.idle_threshold:
+            
+            # PROACTIVE SESSION FINALIZATION:
+            # We finalize the session if:
+            # 1. Enough idle time has passed (standard)
+            # 2. OR the batch is large enough and the last capture is not *extremely* recent 
+            #    (to allow users to see their progress in the timeline)
+            
+            time_since_last = datetime.now() - last_capture_time
+            
+            if time_since_last > self.idle_threshold:
+                # Standard gap-based finalization
+                session_id = self._create_session(current_session_captures)
+                if session_id:
+                    created_session_ids.append(session_id)
+            elif len(current_session_captures) >= 15:
+                # Proactive finalization for active work (approx 7.5 mins of activity)
+                # This ensures sessions appear in the timeline while the user is still working.
+                # When more captures come, they will start a new session block.
+                session_id = self._create_session(current_session_captures)
+                if session_id:
+                    created_session_ids.append(session_id)
+            elif len(current_session_captures) >= 10 and time_since_last > timedelta(minutes=2):
+                # Another heuristic for slower capture intervals
                 session_id = self._create_session(current_session_captures)
                 if session_id:
                     created_session_ids.append(session_id)
             else:
-                # Session might still be active. 
+                # Session is very recent and short, keep it as unprocessed for now
                 pass
 
         return created_session_ids

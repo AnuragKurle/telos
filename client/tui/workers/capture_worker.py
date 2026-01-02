@@ -8,6 +8,8 @@ from pathlib import Path
 from core.database import Database
 from core.analyzer import GeminiAnalyzer, RateLimitError
 from core.capture import ActivityMonitor, ScreenshotCapture
+from core.backend_client import BackendClient, BackendError
+from core.fallback_handler import FallbackHandler, FallbackMode
 from utils.hash_utils import ScreenshotHasher
 
 
@@ -33,6 +35,37 @@ async def capture_worker_task(app):
     capturer = ScreenshotCapture(quality)
     hasher = ScreenshotHasher()
     activity_monitor = ActivityMonitor(idle_timeout)
+    
+    # Initialize Phase 2 components (backend integration)
+    backend_client = None
+    fallback_handler = None
+    
+    backend_enabled = config.get('backend', 'enabled', default=False)
+    if backend_enabled:
+        try:
+            backend_url = config.get('backend', 'url')
+            firebase_api_key = config.get('firebase', 'api_key')
+            timeout = config.get('backend', 'timeout', default=30)
+            fallback_mode = config.get('backend', 'fallback_mode', default='auto')
+            
+            backend_client = BackendClient(
+                backend_url=backend_url,
+                firebase_api_key=firebase_api_key,
+                timeout=timeout
+            )
+            
+            fallback_handler = FallbackHandler(
+                backend_client=backend_client,
+                local_analyzer=analyzer,
+                fallback_mode=fallback_mode
+            )
+            
+            print(f"[Capture Worker] Backend integration enabled (mode: {fallback_mode})")
+        except Exception as e:
+            print(f"[Capture Worker] Failed to initialize backend: {e}")
+            print(f"[Capture Worker] Falling back to local-only mode")
+    else:
+        print("[Capture Worker] Backend integration disabled (using local Gemini only)")
 
     # Start activity monitoring
     activity_monitor.start()
@@ -73,13 +106,22 @@ async def capture_worker_task(app):
             # Get previous 2 captures for context (Phase 5)
             previous_captures = await asyncio.to_thread(db.get_previous_captures, 2)
 
-            # Analyze with Gemini (run in thread to avoid blocking UI)
+            # Analyze with backend or local Gemini (Phase 2)
             try:
-                result = await asyncio.to_thread(
-                    analyzer.analyze_with_fallback,
-                    screenshot_path,
-                    previous_captures
-                )
+                if fallback_handler:
+                    # Use fallback handler (backend with local fallback)
+                    result = await asyncio.to_thread(
+                        fallback_handler.analyze_screenshot,
+                        screenshot_path,
+                        previous_captures
+                    )
+                else:
+                    # Use local Gemini only
+                    result = await asyncio.to_thread(
+                        analyzer.analyze_with_fallback,
+                        screenshot_path,
+                        previous_captures
+                    )
 
                 if result and result.get('confidence', 0) > 0:
                     # Extract detailed_context for storage
@@ -114,6 +156,7 @@ async def capture_worker_task(app):
                     app.current_color = result.get('category_color', '#95a5a6')
                     app.current_app = result['app']
                     app.current_task = result['task']
+                    app.last_analysis_source = result.get('_source', 'local')
 
             except RateLimitError as e:
                 app.loop_status = "rate_limited"

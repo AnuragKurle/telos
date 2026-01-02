@@ -1,6 +1,7 @@
 """Async session worker - runs session processing in background."""
 
 import asyncio
+from datetime import datetime
 from pathlib import Path
 
 from core.database import Database
@@ -45,10 +46,11 @@ async def session_worker_task(app):
                     # Build sessions from unprocessed captures
                     session_ids = await asyncio.to_thread(session_builder.build_sessions)
 
-                    if session_ids:
-                        # Update UI state
-                        app.sessions_today = len(session_ids)
+                    # Update total session count for today
+                    today_sessions = await asyncio.to_thread(db.get_sessions_for_date, datetime.now())
+                    app.sessions_today = len(today_sessions)
 
+                    if session_ids:
                         # Enrich sessions (limited to avoid API spam)
                         # Only enrich up to max_enrichment_per_trigger sessions per trigger
                         for session_id in session_ids[:max_enrichment_per_trigger]:

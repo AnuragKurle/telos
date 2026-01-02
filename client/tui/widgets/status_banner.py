@@ -46,6 +46,12 @@ class StatusBanner(Static):
 
         # Build status line with clearer separation
         # Uses wide spacing
-        status_line = f" {emoji} {status_text}   •   Idle: {idle_str}   •   API: {app.api_calls_used}/{app.api_calls_max} ({api_percent}%) "
+        source_indicator = ""
+        if app.last_analysis_source == "backend":
+            source_indicator = "   •   ☁️ Cloud"
+        elif app.last_analysis_source == "local":
+            source_indicator = "   •   💻 Local"
+
+        status_line = f" {emoji} {status_text}   •   Idle: {idle_str}   •   API: {app.api_calls_used}/{app.api_calls_max} ({api_percent}%){source_indicator} "
 
         self.update(status_line)

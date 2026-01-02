@@ -248,6 +248,20 @@ class Database:
             ''', (start_of_day, end_of_day))
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_captures_for_date(self, date: datetime) -> List[Dict[str, Any]]:
+        """Get all captures for a specific date."""
+        start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM captures
+                WHERE timestamp >= ? AND timestamp < ?
+                ORDER BY timestamp ASC
+            ''', (start_of_day, end_of_day))
+            return [dict(row) for row in cursor.fetchall()]
+
     def reset_sessions_for_date(self, date: datetime) -> int:
         """Delete sessions for a date and mark captures as unprocessed.
         
