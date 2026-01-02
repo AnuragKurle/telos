@@ -1,0 +1,223 @@
+# Telos Development Rules
+
+## Project Overview
+
+Telos is an AI-powered screen time tracker that captures screenshots, analyzes them with Gemini Vision, and provides productivity insights. Privacy-first: all user data stays local.
+
+## Repository Structure
+
+```
+telos/
+├── client/      Python TUI app (Textual framework)
+├── backend/     Node.js Express API (Cloud Run)
+├── shared/      API contracts (source of truth)
+├── website/     Next.js waitlist site (Firebase Hosting)
+├── docs/        Documentation
+└── functions/   Firebase Cloud Functions
+```
+
+## Tech Stack
+
+- **Client**: Python 3.8+, Textual, SQLite, Pillow
+- **Backend**: Node.js 18+, Express, Firebase Admin SDK
+- **AI**: Google Gemini 2.5 Flash
+- **Auth**: Firebase Authentication (anonymous-first)
+- **Hosting**: Google Cloud Run (asia-south1/Mumbai)
+- **Database**: SQLite (client), Firestore (backend prompts/config)
+
+## Key Files to Read First
+
+Before making changes, understand the context:
+
+- `docs/architecture.md` - System design and data flow
+- `docs/decisions.md` - Why things are built this way
+- `shared/api-contract.md` - Backend API specification
+- `client/README.md` - Client features and structure
+- `backend/README.md` - Backend features and structure
+
+## Architecture Decisions (DO NOT VIOLATE)
+
+1. **Privacy-First**: User activity data NEVER leaves the client. Only screenshots are sent for analysis (then deleted).
+
+2. **Anonymous-First Auth**: Users start with Firebase anonymous auth. No signup wall.
+
+3. **Local-First Data**: SQLite on client stores all activity. No cloud sync of user data.
+
+4. **Server-Side Prompts**: AI prompts stored in Firestore, not client code. Update prompts without releases.
+
+5. **Fallback Strategy**: If backend unavailable, fall back to local Gemini API calls.
+
+6. **Perceptual Hashing**: Skip analyzing duplicate screenshots to save API costs.
+
+## Code Conventions
+
+### Python (Client)
+
+- Use type hints for function signatures
+- Async functions for I/O operations (Textual requires this)
+- Config via `config.yaml`, loaded by `utils/config_manager.py`
+- Prompts in `prompts/` folder, loaded by `utils/prompt_loader.py`
+- Database operations through `core/database.py` only
+
+### Node.js (Backend)
+
+- ES modules (`import`/`export`)
+- Express middleware pattern for auth, rate limiting, uploads
+- Secrets from Secret Manager via `services/secrets.js`
+- Prompts from Firestore via `services/prompts.js`
+- Never log request bodies (images are sensitive)
+
+### Both
+
+- Meaningful error messages with error codes
+- Graceful degradation over hard failures
+- No hardcoded secrets or API keys
+
+## Documentation Practices
+
+### When to Update Docs
+
+Update `docs/` when you:
+- Add a new architectural component
+- Make a significant design decision
+- Change deployment process
+- Add a new feature that affects system flow
+- Discover an important gotcha or learning
+
+### How to Update Docs
+
+- `docs/architecture.md` - System changes, new components
+- `docs/development.md` - Setup changes, new env vars
+- `docs/deployment.md` - Deploy process changes
+- `docs/roadmap.md` - Feature status, new ideas
+- `docs/decisions.md` - New architectural decisions with rationale
+
+### Format
+
+Keep docs concise:
+- Use tables for lists of options/features
+- Use code blocks for commands
+- One sentence explanations, not paragraphs
+- Update, don't append (avoid stale info)
+
+## Common Patterns
+
+### Adding a New API Endpoint
+
+1. Update `shared/api-contract.md` first (source of truth)
+2. Implement in `backend/src/routes/`
+3. Add middleware chain (auth, rate limit, validation)
+4. Update client to use new endpoint
+5. Test locally before deploying
+
+### Adding a New TUI Screen
+
+1. Create screen in `client/tui/screens/`
+2. Export from `client/tui/screens/__init__.py`
+3. Add keyboard binding in `client/tui/app.py`
+4. Use existing widgets from `client/tui/widgets/`
+
+### Updating AI Prompts
+
+1. Edit files in `client/prompts/`
+2. Sync to Firestore: `cd backend && node setup-firestore-prompts.js`
+3. Redeploy backend for cloud to pick up changes
+
+### Database Schema Changes
+
+1. Update `client/core/database.py`
+2. Add migration logic if needed
+3. Test with fresh database AND existing data
+
+## What NOT to Do
+
+- DON'T store screenshots permanently (analyze and delete)
+- DON'T hardcode API keys or secrets
+- DON'T skip auth middleware on protected endpoints
+- DON'T make breaking API changes without version bump
+- DON'T add heavy dependencies to client (keep it lightweight)
+- DON'T commit `.env`, `config.yaml`, `firebase-credentials.txt`
+- DON'T create new markdown files in root - use `docs/` folder
+
+## Git Workflow
+
+- `main-monorepo` - Development branch
+- `prod-monorepo` - Production branch
+
+Always:
+1. Work on `main-monorepo`
+2. Test locally
+3. Cherry-pick to `prod-monorepo` for release
+4. Deploy from `prod-monorepo`
+
+## Testing
+
+### Client
+```bash
+cd client
+python main.py          # Run TUI
+python main.py setup    # Setup wizard
+python main.py test     # Test capture
+```
+
+### Backend
+```bash
+cd backend
+npm run dev             # Local server
+curl localhost:8080/health  # Health check
+```
+
+## Deployment
+
+### Backend to Cloud Run
+```bash
+cd backend
+.\deploy-anywhere.ps1   # Windows
+./deploy.sh             # Linux/Mac
+```
+
+### Build Desktop Apps - by pushing to prod-monorepo - we have github actions set for it 
+
+## Important URLs
+
+- Backend: https://telos-backend-ae7k4avtpq-el.a.run.app
+- Firebase Project: gen-lang-client-0772617718
+
+## Gotchas and Learnings
+
+1. **Textual Static widget** doesn't render markdown - use `Markdown` widget for AI responses
+
+2. **Firebase tokens** expire in 1 hour - client must refresh automatically
+
+3. **Cloud Run cold starts** take 1-2s - first request after idle is slow
+
+4. **macOS permissions** must be granted manually (Screen Recording, Accessibility)
+
+5. **Windows service** needs administrator for install/uninstall
+
+6. **Perceptual hash threshold** of 5 works well for duplicate detection
+
+7. **Rate limits** are per-user (100/hr, 2000/day) - tracked in Firestore
+
+8. **Gemini thinking mode** requires special handling (disable for faster responses)
+
+## When Adding Features
+
+Ask yourself:
+1. Is this documented in the right place?
+2. Does the API contract need updating?
+3. Will this break existing clients?
+
+## Quick Reference
+
+| Task | Command/Location |
+|------|------------------|
+| Run client | `cd client && python main.py` |
+| Run backend | `cd backend && npm run dev` |
+| Deploy backend | `cd backend && .\deploy-anywhere.ps1` |
+| Build Windows exe | `cd client && python build_installer.py` |
+| Sync prompts | `cd backend && node setup-firestore-prompts.js` |
+| API spec | `shared/api-contract.md` |
+| Architecture | `docs/architecture.md` |
+| Decisions | `docs/decisions.md` |
+
