@@ -4,6 +4,7 @@
 
 import express from 'express';
 import { verifyFirebaseToken } from '../middleware/auth.js';
+import { sendSignupNotification } from '../services/slack.js';
 import admin from 'firebase-admin';
 
 const router = express.Router();
@@ -72,6 +73,13 @@ router.post('/link-email', verifyFirebaseToken, async (req, res) => {
       
       // Log the conversion
       console.log(`[AUTH] Anonymous user ${uid} linked to email: ${email}`);
+      
+      // Send Slack notification (non-blocking)
+      sendSignupNotification({
+        uid: updatedUser.uid,
+        email: updatedUser.email,
+        createdAt: updatedUser.metadata.creationTime
+      }).catch(err => console.error('[SLACK] Failed to send signup notification:', err));
       
       // Return updated user info
       return res.json({

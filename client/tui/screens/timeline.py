@@ -2,7 +2,7 @@
 
 from datetime import datetime
 import json
-from typing import Any
+from typing import Any, Optional
 from textual.screen import Screen
 from textual.reactive import reactive
 from textual.app import ComposeResult
@@ -11,6 +11,7 @@ from textual.containers import Container, Horizontal, Vertical
 from rich.text import Text
 
 from core.database import Database
+from tui.screens.feedback_modal import FeedbackModal
 
 
 class TimelineScreen(Screen):
@@ -50,6 +51,10 @@ class TimelineScreen(Screen):
         self.title = "Activity Timeline"
         self._update_subtitle()
 
+        # Store selected item for feedback
+        self.selected_item = None
+        self.selected_item_type = None
+
         # Setup table
         table = self.query_one(DataTable)
         table.cursor_type = "row"
@@ -78,6 +83,10 @@ class TimelineScreen(Screen):
         row_key = getattr(event.row_key, "value", None)
         if not row_key:
             return
+        
+        # Store selected item for feedback
+        self.selected_item = row_key
+        self.selected_item_type = self.view_mode
             
         if self.view_mode == "sessions":
             self.show_session_details(row_key)
@@ -369,3 +378,129 @@ class TimelineScreen(Screen):
                 target_row = total_rows - 1
             
             self.call_after_refresh(lambda r=target_row: table.move_cursor(row=r))
+
+    def action_show_feedback(self) -> None:
+        """Show feedback modal for selected session or capture."""
+        if not self.selected_item:
+            # Show message if nothing selected
+            self.query_one("#detail-content").update(
+                "Please select a session or capture first,\n"
+                "then press F to provide feedback."
+            )
+            return
+
+        # Check if backend is enabled (but still show modal)
+        config = self.app.config
+        backend_enabled = config.get('backend', 'enabled', default=False)
+
+        # Build context based on view mode
+        if self.view_mode == "sessions":
+            if self.selected_item == "ongoing":
+                context = {
+                    'type': 'session',
+                    'screen': 'timeline',
+                    'session_id': 'ongoing',
+                }
+            else:
+                context = {
+                    'type': 'session',
+                    'screen': 'timeline',
+                    'session_id': int(self.selected_item),
+                }
+        else:
+            context = {
+                'type': 'capture',
+                'screen': 'timeline',
+                'capture_id': int(self.selected_item),
+            }
+
+        # Get additional context from selected item
+        try:
+            config = self.app.config
+            db = Database(config.get('storage', 'database_path'))
+            
+            if self.view_mode == "sessions" and self.selected_item != "ongoing":
+                session = db.get_session_by_id(int(self.selected_item))
+                if session:
+                    context['task'] = session.get('primary_task', 'Unknown')
+            elif self.view_mode == "captures":
+                with db._get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM captures WHERE id = ?", (int(self.selected_item),))
+                    row = cursor.fetchone()
+                    if row:
+                        capture = dict(row)
+                        context['app'] = capture.get('app_name', 'Unknown')
+                        context['task'] = capture.get('task', 'Unknown')
+        except Exception:
+            pass  # Continue even if we can't get context
+
+        def handle_feedback(result: Optional[str]) -> None:
+            """Handle feedback submission."""
+            if not result or not result.strip():
+                return
+            
+            if not backend_enabled:
+                self.query_one("#detail-content").update(
+                    "[bold yellow]Feedback collected but backend not configured.[/bold yellow]\n\n"
+                    "Your feedback: " + result[:100] + "\n\n"
+                    "Please configure backend in settings to submit feedback."
+                )
+                return
+            
+            # Submit feedback asynchronously
+            self.run_worker(self._submit_feedback_async(result.strip(), context))
+
+        try:
+            # Push modal - this should show immediately
+            self.app.push_screen(FeedbackModal(context), handle_feedback)
+        except Exception as e:
+            # Show error if modal fails to open
+            self.query_one("#detail-content").update(
+                f"[bold red]Error opening feedback modal: {str(e)}[/bold red]\n\n"
+                "Please check console for details."
+            )
+
+    async def _submit_feedback_async(self, feedback_text: str, context: dict) -> None:
+        """Submit feedback to backend asynchronously."""
+        try:
+            import asyncio
+            from core.backend_client import BackendClient
+            
+            config = self.app.config
+            backend_url = config.get('backend', 'url')
+            firebase_api_key = config.get('firebase', 'api_key')
+            
+            backend_client = BackendClient(
+                backend_url=backend_url,
+                firebase_api_key=firebase_api_key
+            )
+            
+            feedback_type = context.get('type', 'general')
+            metadata = {
+                'screen': 'timeline',
+                'app_version': '0.1.0',
+            }
+            
+            result = await asyncio.to_thread(
+                backend_client.submit_feedback,
+                feedback_type=feedback_type,
+                feedback_text=feedback_text,
+                context=context,
+                metadata=metadata
+            )
+            
+            # Show success message
+            self.query_one("#detail-content").update(
+                f"[bold green]✓ Feedback submitted successfully![/bold green]\n\n"
+                f"Thank you for helping improve Telos.\n\n"
+                f"Select another item to view details."
+            )
+            
+        except Exception as e:
+            # Show error message
+            self.query_one("#detail-content").update(
+                f"[bold red]✗ Failed to submit feedback[/bold red]\n\n"
+                f"Error: {str(e)}\n\n"
+                f"Please try again or check your backend connection."
+            )

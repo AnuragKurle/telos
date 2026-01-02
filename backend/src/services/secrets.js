@@ -66,6 +66,63 @@ export async function getGeminiApiKey() {
 }
 
 /**
+ * Get Slack Bot Token from Secret Manager or environment
+ * 
+ * @returns {Promise<string|null>} Slack Bot Token or null if not found
+ */
+export async function getSlackBotToken() {
+  // Try Secret Manager first
+  try {
+    const secretName = process.env.SLACK_BOT_TOKEN_SECRET_NAME || 'SLACK_BOT_TOKEN';
+    return await getSecret(secretName);
+  } catch (error) {
+    // Fallback to environment variable
+    if (process.env.SLACK_BOT_TOKEN) {
+      return process.env.SLACK_BOT_TOKEN;
+    }
+    return null;
+  }
+}
+
+/**
+ * Get Slack Webhook URL from Secret Manager or environment
+ * 
+ * @returns {Promise<string|null>} Slack Webhook URL or null if not found
+ */
+export async function getSlackWebhook() {
+  // Try Secret Manager first
+  try {
+    const secretName = process.env.SLACK_WEBHOOK_SECRET_NAME || 'SLACK_WEBHOOK';
+    return await getSecret(secretName);
+  } catch (error) {
+    // Fallback to environment variable
+    if (process.env.SLACK_WEBHOOK) {
+      return process.env.SLACK_WEBHOOK;
+    }
+    return null;
+  }
+}
+
+/**
+ * Get Slack Signup Webhook URL from Secret Manager or environment
+ * 
+ * @returns {Promise<string|null>} Slack Signup Webhook URL or null if not found
+ */
+export async function getSlackSignupWebhook() {
+  // Try Secret Manager first
+  try {
+    const secretName = process.env.SLACK_SIGNUP_WEBHOOK_SECRET_NAME || 'SLACK_SIGNUP_WEBHOOK';
+    return await getSecret(secretName);
+  } catch (error) {
+    // Fallback to environment variable
+    if (process.env.SLACK_SIGNUP_WEBHOOK) {
+      return process.env.SLACK_SIGNUP_WEBHOOK;
+    }
+    return null;
+  }
+}
+
+/**
  * Clear the secret cache (useful for testing or forced refresh)
  */
 export function clearSecretCache() {
@@ -76,6 +133,9 @@ export function clearSecretCache() {
 export default {
   getSecret,
   getGeminiApiKey,
+  getSlackBotToken,
+  getSlackWebhook,
+  getSlackSignupWebhook,
   clearSecretCache,
 };
 

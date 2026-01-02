@@ -86,6 +86,7 @@ class TelosApp(App):
         ("a", "show_chat", "AI Chat"),
         ("h", "show_help", "Help"),
         ("q", "quit", "Quit"),
+        ("f", "show_feedback", "Feedback"),
     ]
 
     def __init__(self, config: ConfigManager):
@@ -219,3 +220,52 @@ class TelosApp(App):
     def action_show_help(self) -> None:
         """Show the help screen."""
         self.push_screen(HelpScreen())
+    
+    def action_show_feedback(self) -> None:
+        """Show feedback modal from any screen."""
+        from tui.screens.feedback_modal import FeedbackModal
+        from typing import Optional
+        
+        # Get current screen for context
+        current_screen = self.screen
+        screen_name = current_screen.__class__.__name__.replace('Screen', '').lower()
+        
+        context = {
+            'type': 'general',
+            'screen': screen_name,
+        }
+        
+        def handle_feedback(result: Optional[str]) -> None:
+            """Handle feedback submission."""
+            if not result or not result.strip():
+                return
+            
+            # Check if backend is enabled
+            backend_enabled = self.config.get('backend', 'enabled', default=False)
+            
+            if not backend_enabled:
+                self.notify(
+                    "Feedback collected but backend not configured.",
+                    severity="warning",
+                    timeout=5
+                )
+                return
+            
+            # Submit feedback - delegate to current screen if it has the method
+            if hasattr(current_screen, '_submit_feedback_async'):
+                current_screen.run_worker(current_screen._submit_feedback_async(result.strip(), context))
+            else:
+                self.notify(
+                    "Feedback submitted (no handler on this screen)",
+                    severity="information",
+                    timeout=3
+                )
+        
+        try:
+            self.push_screen(FeedbackModal(context), handle_feedback)
+        except Exception as e:
+            self.notify(
+                f"Error opening feedback modal: {str(e)}",
+                severity="error",
+                timeout=5
+            )

@@ -1,6 +1,7 @@
 """Dashboard screen - main view."""
 
 from datetime import datetime
+from typing import Optional
 from textual.screen import Screen
 from textual.reactive import reactive
 from textual.app import ComposeResult
@@ -11,6 +12,7 @@ from textual.binding import Binding
 from tui.widgets import StatusBanner, CurrentActivity, CategoryBreakdown, RecentTimeline
 from tui.widgets.day_heatmap import DayHeatmap
 from tui.widgets.activity_waveform import ActivityWaveform
+from tui.screens.feedback_modal import FeedbackModal
 
 
 class DashboardScreen(Screen):
@@ -24,7 +26,8 @@ class DashboardScreen(Screen):
         Binding("space", "toggle_expanded", "", show=False),  # Hidden from footer
         Binding("left", "previous_day", "", show=False),  # Hidden from footer
         Binding("right", "next_day", "", show=False),  # Hidden from footer
-        Binding("t", "jump_to_today", "", show=False),  # Hidden from footer (T for Today)
+        # Note: T for Timeline is inherited from app-level, lowercase 't' here is for "Today"
+        Binding("shift+t", "jump_to_today", "", show=False),  # Shift+T for "Today" to avoid conflict
     ]
 
     CSS = """
@@ -190,6 +193,100 @@ class DashboardScreen(Screen):
     def action_toggle_graph_mode(self) -> None:
         """Toggle between 60-minute waveform and full day heatmap."""
         self.graph_mode = "day" if self.graph_mode == "60min" else "60min"
+
+    def action_show_feedback(self) -> None:
+        """Show feedback modal for current activity."""
+        try:
+            # Get current activity from app state
+            context = {
+                'type': 'capture',
+                'screen': 'dashboard',
+                'app': getattr(self.app, 'current_app', None) or 'Unknown',
+                'task': getattr(self.app, 'current_task', None) or 'No activity',
+                'category': getattr(self.app, 'current_category', None) or 'idle',
+            }
+
+            def handle_feedback(result: Optional[str]) -> None:
+                """Handle feedback submission."""
+                if not result or not result.strip():
+                    return
+                
+                # Check if backend is enabled
+                config = self.app.config
+                backend_enabled = config.get('backend', 'enabled', default=False)
+                
+                if not backend_enabled:
+                    self.app.notify(
+                        "Feedback collected but backend not configured. Configure in settings.",
+                        severity="warning",
+                        timeout=5
+                    )
+                    return
+                
+                # Submit feedback asynchronously
+                try:
+                    self.run_worker(self._submit_feedback_async(result.strip(), context))
+                except Exception as e:
+                    self.app.notify(
+                        f"Error submitting feedback: {str(e)}",
+                        severity="error",
+                        timeout=5
+                    )
+
+            # Push modal - this should show immediately
+            self.app.push_screen(FeedbackModal(context), handle_feedback)
+        except Exception as e:
+            # Show error notification
+            import traceback
+            self.app.notify(
+                f"Error opening feedback modal: {str(e)}",
+                severity="error",
+                timeout=5
+            )
+            print(f"Feedback modal error: {traceback.format_exc()}")
+
+    async def _submit_feedback_async(self, feedback_text: str, context: dict) -> None:
+        """Submit feedback to backend asynchronously."""
+        try:
+            import asyncio
+            from core.backend_client import BackendClient
+            
+            config = self.app.config
+            backend_url = config.get('backend', 'url')
+            firebase_api_key = config.get('firebase', 'api_key')
+            
+            backend_client = BackendClient(
+                backend_url=backend_url,
+                firebase_api_key=firebase_api_key
+            )
+            
+            metadata = {
+                'screen': 'dashboard',
+                'app_version': '0.1.0',
+            }
+            
+            result = await asyncio.to_thread(
+                backend_client.submit_feedback,
+                feedback_type='capture',
+                feedback_text=feedback_text,
+                context=context,
+                metadata=metadata
+            )
+            
+            # Show success notification
+            self.app.notify(
+                "✓ Feedback submitted successfully!",
+                severity="success",
+                timeout=3
+            )
+            
+        except Exception as e:
+            # Show error notification
+            self.app.notify(
+                f"✗ Failed to submit feedback: {str(e)}",
+                severity="error",
+                timeout=5
+            )
 
     def action_toggle_expanded(self) -> None:
         """Toggle expanded view (only works in day mode)."""

@@ -11,6 +11,7 @@ import dotenv from 'dotenv';
 import { initializeFirebase } from './config/firebase.js';
 import analyzeRoutes from './routes/analyze.js';
 import authRoutes from './routes/auth.js';
+import feedbackRoutes from './routes/feedback.js';
 
 // Load environment variables
 dotenv.config();
@@ -48,6 +49,7 @@ app.get('/', (req, res) => {
 // API routes
 app.use('/v1/analyze', analyzeRoutes);
 app.use('/v1/auth', authRoutes);
+app.use('/v1/feedback', feedbackRoutes);
 
 // 404 handler
 app.use((req, res) => {

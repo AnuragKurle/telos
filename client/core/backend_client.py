@@ -239,6 +239,87 @@ class BackendClient:
     def sign_out(self) -> None:
         """Sign out and clear credentials."""
         self.firebase_auth.sign_out()
+    
+    def submit_feedback(
+        self,
+        feedback_type: str,
+        feedback_text: str,
+        context: Optional[Dict] = None,
+        metadata: Optional[Dict] = None,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Submit feedback on AI analysis.
+        
+        Args:
+            feedback_type: Type of feedback ('summary', 'session', 'capture', 'general')
+            feedback_text: User's feedback text
+            context: Optional context dict (e.g., {'summary_id': 123})
+            metadata: Optional metadata dict (e.g., {'screen': 'summary', 'app_version': '0.1.0'})
+            retry_auth: Retry with fresh token if auth fails
+            
+        Returns:
+            Response dict with success status and feedback_id
+            
+        Raises:
+            AuthenticationError: If authentication fails
+            BackendError: If request fails
+        """
+        # Apply client-side rate limiting
+        self._apply_rate_limit()
+        
+        # Get Firebase token
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+        
+        # Prepare request payload
+        payload = {
+            'feedback_type': feedback_type,
+            'feedback_text': feedback_text,
+            'context': context or {},
+            'metadata': metadata or {},
+        }
+        
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+            
+            response = requests.post(
+                f"{self.backend_url}/v1/feedback",
+                json=payload,
+                headers=headers,
+                timeout=self.timeout
+            )
+            
+            # Handle response codes
+            if response.status_code in (200, 201):
+                return response.json()
+            
+            elif response.status_code == 401:
+                # Token expired, retry with fresh token
+                if retry_auth:
+                    print("Token expired, refreshing...")
+                    token = self.firebase_auth.get_token(force_refresh=True)
+                    return self.submit_feedback(feedback_type, feedback_text, context, metadata, retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed after token refresh")
+            
+            elif response.status_code == 400:
+                error_msg = response.json().get('message', 'Bad request')
+                raise BackendError(f"Bad request: {error_msg}")
+            
+            else:
+                raise BackendError(f"Unexpected status {response.status_code}: {response.text[:200]}")
+        
+        except requests.Timeout:
+            raise BackendError(f"Request timed out after {self.timeout}s")
+        
+        except requests.RequestException as e:
+            raise BackendError(f"Network error: {e}")
 
 
 # Convenience function for testing

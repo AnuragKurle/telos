@@ -88,6 +88,7 @@ class HelpScreen(Screen):
                     yield Static("S - Summary (daily insights)", classes="help-item")
                     yield Static("C - Settings", classes="help-item")
                     yield Static("A - AI Chat (query your data)", classes="help-item")
+                    yield Static("F - Submit feedback (report AI errors)", classes="help-item")
                     yield Static("G - Edit analysis goals", classes="help-item")
                     yield Static("H - Help (this screen)", classes="help-item")
                     yield Static("Q - Quit", classes="help-item")

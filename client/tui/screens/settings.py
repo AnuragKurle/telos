@@ -4,10 +4,13 @@ from textual.screen import Screen
 from textual.app import ComposeResult
 from textual.widgets import Header, Footer, Static
 from textual.containers import ScrollableContainer
+from typing import Optional
 
 from core.database import Database
 from core.goal_manager import AnalysisGoalManager
+from core.backend_client import BackendClient, BackendError, AuthenticationError
 from tui.screens.goal_editor import GoalEditorModal
+from tui.screens.feedback_modal import FeedbackModal
 
 
 class SettingsScreen(Screen):
@@ -111,3 +114,83 @@ To generate daily summary: python main.py generate-summary
 Press ESC to return to dashboard
 """
         self.query_one("#settings-content").update(settings_text)
+
+    def action_show_feedback(self) -> None:
+        """Show feedback modal for settings screen."""
+        try:
+            config = self.app.config
+            backend_enabled = config.get('backend', 'enabled', default=False)
+            
+            context = {
+                'type': 'general',
+                'screen': 'settings',
+            }
+            
+            def handle_feedback(result: Optional[str]) -> None:
+                """Handle feedback submission."""
+                if not result or not result.strip():
+                    return
+                
+                if not backend_enabled:
+                    self.app.notify(
+                        "Feedback collected but backend not configured.",
+                        severity="warning",
+                        timeout=5
+                    )
+                    return
+                
+                # Submit feedback asynchronously
+                self.run_worker(self._submit_feedback_async(result.strip(), context))
+
+            self.app.push_screen(FeedbackModal(context), handle_feedback)
+        except Exception as e:
+            self.app.notify(
+                f"Error opening feedback modal: {str(e)}",
+                severity="error",
+                timeout=5
+            )
+
+    async def _submit_feedback_async(self, feedback_text: str, context: dict) -> None:
+        """Submit feedback to backend asynchronously."""
+        try:
+            import asyncio
+            
+            config = self.app.config
+            backend_url = config.get('backend', 'url')
+            firebase_api_key = config.get('firebase', 'api_key')
+            
+            backend_client = BackendClient(
+                backend_url=backend_url,
+                firebase_api_key=firebase_api_key
+            )
+            
+            metadata = {
+                'screen': context.get('screen', 'settings'),
+                'app_version': '0.1.0',
+            }
+            
+            response = await asyncio.to_thread(
+                backend_client.submit_feedback,
+                feedback_type=context.get('type', 'general'),
+                feedback_text=feedback_text,
+                context=context,
+                metadata=metadata
+            )
+            
+            self.app.notify(
+                "✓ Feedback submitted successfully!",
+                severity="information",
+                timeout=3
+            )
+        except (BackendError, AuthenticationError) as e:
+            self.app.notify(
+                f"Failed to submit feedback: {str(e)}",
+                severity="error",
+                timeout=5
+            )
+        except Exception as e:
+            self.app.notify(
+                f"Unexpected error: {str(e)}",
+                severity="error",
+                timeout=5
+            )

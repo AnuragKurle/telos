@@ -5,7 +5,7 @@ from textual.reactive import reactive
 
 
 class StatusBanner(Static):
-    """Top status bar showing loop status, idle time, and API quota.
+    """Top status bar showing loop status and idle time.
     
     Compact single-line display.
     """
@@ -31,12 +31,6 @@ class StatusBanner(Static):
 
         emoji, status_text = status_map.get(app.loop_status, ("⚪", "UNKNOWN"))
 
-        # API usage percentage
-        if app.api_calls_max > 0:
-            api_percent = int((app.api_calls_used / app.api_calls_max) * 100)
-        else:
-            api_percent = 0
-            
         # Format idle time compactly
         idle = app.idle_seconds
         if idle < 60:
@@ -52,6 +46,6 @@ class StatusBanner(Static):
         elif app.last_analysis_source == "local":
             source_indicator = "   •   💻 Local"
 
-        status_line = f" {emoji} {status_text}   •   Idle: {idle_str}   •   API: {app.api_calls_used}/{app.api_calls_max} ({api_percent}%){source_indicator} "
+        status_line = f" {emoji} {status_text}   •   Idle: {idle_str}{source_indicator} "
 
         self.update(status_line)

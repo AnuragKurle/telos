@@ -13,6 +13,7 @@ from .email_setup import EmailSetupScreen
 from .onboarding_complete import OnboardingCompleteScreen
 from .upgrade import UpgradeScreen
 from .help import HelpScreen
+from .feedback_modal import FeedbackModal
 
 __all__ = [
     'DashboardScreen', 
@@ -28,4 +29,5 @@ __all__ = [
     'OnboardingCompleteScreen',
     'UpgradeScreen',
     'HelpScreen',
+    'FeedbackModal',
 ]

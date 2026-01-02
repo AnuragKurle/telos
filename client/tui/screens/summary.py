@@ -3,6 +3,7 @@
 import json
 import asyncio
 from datetime import datetime
+from typing import Optional
 from textual.screen import Screen
 from textual.app import ComposeResult
 from textual.widgets import Header, Footer, Static, LoadingIndicator
@@ -13,6 +14,7 @@ from core.analyzer import GeminiAnalyzer
 from core.goal_manager import AnalysisGoalManager
 from core.daily_aggregator import DailyAggregator
 from core.session_builder import SessionBuilder
+from tui.screens.feedback_modal import FeedbackModal
 
 
 class SummaryScreen(Screen):
@@ -41,6 +43,9 @@ class SummaryScreen(Screen):
 
         # Hide loader initially
         self.query_one("#summary-loader").display = False
+
+        # Store current summary for feedback
+        self.current_summary = None
 
         # Generate summary on first view
         self.run_worker(self.generate_summary_async())
@@ -165,8 +170,10 @@ class SummaryScreen(Screen):
         self.query_one("#summary-loader").display = False
 
         if summary:
+            self.current_summary = summary
             self.display_summary(summary)
         else:
+            self.current_summary = None
             self.query_one("#summary-content").update(
                 "No data available for today.\n\n"
                 "Start using the app and sessions will be created automatically.\n"
@@ -261,6 +268,96 @@ class SummaryScreen(Screen):
 [dim]Press R to regenerate summary | B to rebuild sessions | ESC to go back[/dim]
 """
         self.query_one("#summary-content").update(content)
+
+    def action_show_feedback(self) -> None:
+        """Show feedback modal for current summary."""
+        if not self.current_summary:
+            # Show message if no summary available
+            self.query_one("#summary-content").update(
+                "No summary available to provide feedback on.\n\n"
+                "Generate a summary first, then you can provide feedback."
+            )
+            return
+
+        # Check if backend is enabled (but still show modal even if not - user can type feedback)
+        config = self.app.config
+        backend_enabled = config.get('backend', 'enabled', default=False)
+        
+        # Create feedback modal with context
+        context = {
+            'type': 'summary',
+            'screen': 'summary',
+            'summary_id': self.current_summary.get('id'),
+            'date': self.current_summary.get('date'),
+        }
+        
+        def handle_feedback(result: Optional[str]) -> None:
+            """Handle feedback submission."""
+            if not result or not result.strip():
+                return
+            
+            if not backend_enabled:
+                self.query_one("#summary-content").update(
+                    "[bold yellow]Feedback collected but backend not configured.[/bold yellow]\n\n"
+                    "Your feedback: " + result[:100] + "\n\n"
+                    "Please configure backend in settings to submit feedback."
+                )
+                return
+            
+            # Submit feedback asynchronously
+            self.run_worker(self._submit_feedback_async(result.strip(), context))
+
+        try:
+            # Push modal - this should show immediately
+            self.app.push_screen(FeedbackModal(context), handle_feedback)
+        except Exception as e:
+            # Show error if modal fails to open
+            self.query_one("#summary-content").update(
+                f"[bold red]Error opening feedback modal: {str(e)}[/bold red]\n\n"
+                "Please check console for details."
+            )
+
+    async def _submit_feedback_async(self, feedback_text: str, context: dict) -> None:
+        """Submit feedback to backend asynchronously."""
+        try:
+            from core.backend_client import BackendClient
+            
+            config = self.app.config
+            backend_url = config.get('backend', 'url')
+            firebase_api_key = config.get('firebase', 'api_key')
+            
+            backend_client = BackendClient(
+                backend_url=backend_url,
+                firebase_api_key=firebase_api_key
+            )
+            
+            metadata = {
+                'screen': 'summary',
+                'app_version': '0.1.0',
+            }
+            
+            result = await asyncio.to_thread(
+                backend_client.submit_feedback,
+                feedback_type='summary',
+                feedback_text=feedback_text,
+                context=context,
+                metadata=metadata
+            )
+            
+            # Show success message
+            self.query_one("#summary-content").update(
+                f"[bold green]✓ Feedback submitted successfully![/bold green]\n\n"
+                f"Thank you for helping improve Telos.\n\n"
+                f"Press ESC to return to summary."
+            )
+            
+        except Exception as e:
+            # Show error message
+            self.query_one("#summary-content").update(
+                f"[bold red]✗ Failed to submit feedback[/bold red]\n\n"
+                f"Error: {str(e)}\n\n"
+                f"Please try again or check your backend connection."
+            )
 
     def _create_progress_bar(self, value: float, width: int = 30) -> str:
         """Create a simple ASCII progress bar.
