@@ -21,23 +21,57 @@ const FALLBACK_METADATA = {
  * 
  * @param {Buffer} imageBuffer - Screenshot image data
  * @param {string} mimeType - Image MIME type (e.g., "image/png")
+ * @param {Array} previousCaptures - Previous captures for context
  * @returns {Promise<object>} Analysis result matching API contract schema
  */
-export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png') {
+export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png', previousCaptures = []) {
   try {
     // Get API key and prompt
     const apiKey = await getGeminiApiKey();
-    const prompt = await getScreenshotAnalysisPrompt();
+    const promptData = await getScreenshotAnalysisPrompt();
+
+    // Build context string from previous captures (similar to client logic)
+    const contextStr = buildPreviousContext(previousCaptures);
+    const finalPrompt = promptData.content.replace('{previous_context}', contextStr);
 
     // Convert image to base64
     const base64Image = imageBuffer.toString('base64');
+
+    // Define response schema to prevent "Unknown" fallbacks
+    const responseSchema = {
+      type: "object",
+      properties: {
+        simple_category: {
+          type: "string",
+          enum: ["work", "learning", "browsing", "entertainment", "idle"]
+        },
+        category: { type: "string" },
+        category_emoji: { type: "string" },
+        category_color: { type: "string" },
+        app: { type: "string" },
+        task: { type: "string" },
+        confidence: { type: "number" },
+        detailed_context: {
+          type: "object",
+          properties: {
+            file_name: { type: "string" },
+            cursor_position: { type: "string" },
+            browser_url: { type: "string" },
+            full_description: { type: "string" },
+            progress_from_last: { type: "string" },
+            ai_observations: { type: "string" }
+          }
+        }
+      },
+      required: ["simple_category", "category", "category_emoji", "category_color", "app", "task", "confidence"]
+    };
 
     // Prepare request payload for Gemini API
     const requestBody = {
       contents: [
         {
           parts: [
-            { text: prompt.content },
+            { text: finalPrompt },
             {
               inline_data: {
                 mime_type: mimeType,
@@ -49,14 +83,23 @@ export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png') {
       ],
       generationConfig: {
         temperature: 0.4,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 4096,
         responseMimeType: 'application/json',
+        responseSchema: responseSchema,
+        // Enable thinking mode for gemini-2.5-flash
+        // -1 = dynamic thinking budget (recommended)
+        // 0 = disable thinking
+        // >0 = specific token budget (e.g., 1024)
+        thinkingConfig: {
+          thinkingBudget: -1,
+        },
       },
     };
 
-    // Call Gemini API (using gemini-2.0-flash-exp)
+    // Use the explicitly requested gemini-2.5-flash model
+    const model = "gemini-2.5-flash";
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -95,30 +138,39 @@ export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png') {
       throw new Error('Invalid JSON response from Gemini API');
     }
 
-    // Use AI-generated values directly (AI autonomy!)
-    // Only use fallbacks if AI didn't provide them
-    const category = analysis.category || 'Unknown';
-    const emoji = analysis.category_emoji || FALLBACK_METADATA.emoji;
-    const color = analysis.category_color || FALLBACK_METADATA.color;
-    const simpleCategory = analysis.simple_category || 'idle';
-
     // Return standardized response matching API contract
     return {
-      category,
-      simple_category: simpleCategory,
+      category: analysis.category || 'Unknown',
+      simple_category: analysis.simple_category || 'idle',
       app: analysis.app || 'Unknown',
       task: analysis.task || 'Activity detected',
       confidence: typeof analysis.confidence === 'number' ? analysis.confidence : 0.5,
-      detailed_context: analysis.detailed_context || {},  // Now an object
-      category_emoji: emoji,
-      category_color: color,
-      analysis_version: prompt.version,
+      detailed_context: analysis.detailed_context || {},
+      category_emoji: analysis.category_emoji || FALLBACK_METADATA.emoji,
+      category_color: analysis.category_color || FALLBACK_METADATA.color,
+      analysis_version: promptData.version,
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
     console.error('❌ Screenshot analysis failed:', error.message);
     throw error;
   }
+}
+
+/**
+ * Helper to build context string from previous captures
+ */
+function buildPreviousContext(previousCaptures) {
+  if (!previousCaptures || previousCaptures.length === 0) {
+    return "No previous context available. This is the first capture.";
+  }
+
+  return previousCaptures.map((cap, i) => {
+    const app = cap.app || cap.app_name || 'unknown';
+    const task = cap.task || 'unknown';
+    const cat = cap.category || 'unknown';
+    return `${i + 1} capture(s) ago: [${cat}] ${app} - ${task}`;
+  }).join('\n');
 }
 
 /**
