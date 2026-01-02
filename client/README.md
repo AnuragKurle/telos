@@ -77,12 +77,74 @@ python main.py generate-summary   # Generate daily summary
 python main.py test-email         # Test email configuration
 ```
 
-### Windows Service
+### Background Service
+
+**Windows:**
 ```bash
 python main.py service-console    # Run as daemon (test mode)
 python main.py install-service    # Install Windows service
 python main.py start-service      # Start service
 python main.py stop-service       # Stop service
+```
+
+**macOS:**
+```bash
+python main.py service-console    # Run as daemon (test mode)
+python main.py install-service    # Install LaunchAgent
+python main.py start-service      # Start service
+python main.py stop-service       # Stop service
+python main.py service-status     # Check service status
+```
+
+## Building Standalone Applications
+
+### Windows Build
+
+```bash
+# Install PyInstaller
+pip install pyinstaller
+
+# Build Windows executable and installer
+python build_installer.py
+
+# Output: dist/Telos.exe and TelosSetup-v0.1.0.exe
+```
+
+### macOS Build
+
+```bash
+# Install PyInstaller
+pip install pyinstaller
+
+# Build macOS .app bundle and DMG
+python build_macos.py
+
+# Output: dist/Telos.app and Telos-v0.1.0-beta-macOS.dmg
+```
+
+**macOS Installation:**
+1. Open the DMG file
+2. Drag `Telos.app` to Applications folder
+3. Right-click → Open (first time only, to bypass Gatekeeper)
+4. Grant **Screen Recording** permission when prompted
+5. Grant **Accessibility** permission when prompted
+
+**macOS Permissions:**
+- **Screen Recording** - Required for screenshot capture
+- **Accessibility** - Required for keyboard/mouse activity detection
+
+To grant permissions manually:
+1. Open System Settings → Privacy & Security → Privacy
+2. Select "Screen Recording" → Enable Telos
+3. Select "Accessibility" → Enable Telos
+4. Restart Telos
+
+**Creating an Icon:**
+If you want to customize the macOS icon:
+```bash
+cd macos
+python create_icns.py your-icon.png
+# This creates icon.icns, then rebuild with python build_macos.py
 ```
 
 ## Technical Details
@@ -106,9 +168,11 @@ python main.py stop-service       # Stop service
 - Adjust `capture.interval_seconds` in config
 
 **Activity Detection**
-- macOS: Grant accessibility permissions
-- Windows: Run as administrator if needed
-- Linux: Check `xinput` permissions
+- **macOS**: Grant Screen Recording and Accessibility permissions in System Settings
+  - System Settings → Privacy & Security → Privacy → Screen Recording
+  - System Settings → Privacy & Security → Privacy → Accessibility
+- **Windows**: Run as administrator if needed
+- **Linux**: Check `xinput` permissions
 
 ## Status
 

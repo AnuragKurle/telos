@@ -1,0 +1,55 @@
+============================================
+Telos macOS Icon Instructions
+============================================
+
+The icon.icns file is required for the macOS .app bundle.
+PyInstaller will look for it at: client/macos/icon.icns
+
+OPTION 1: Create from PNG (Recommended)
+----------------------------------------
+1. Create or obtain a high-resolution PNG image (1024x1024 recommended)
+2. Save it as telos-icon.png in this directory
+3. Run: python create_icns.py telos-icon.png
+4. This will generate icon.icns automatically
+
+OPTION 2: Use macOS iconutil
+-----------------------------
+1. Create a directory called icon.iconset
+2. Add PNG images at these exact sizes and names:
+   - icon_16x16.png
+   - icon_16x16@2x.png (actually 32x32)
+   - icon_32x32.png
+   - icon_32x32@2x.png (actually 64x64)
+   - icon_128x128.png
+   - icon_128x128@2x.png (actually 256x256)
+   - icon_256x256.png
+   - icon_256x256@2x.png (actually 512x512)
+   - icon_512x512.png
+   - icon_512x512@2x.png (actually 1024x1024)
+
+3. Run: iconutil -c icns icon.iconset
+4. Move the generated icon.icns to this directory
+
+OPTION 3: Online Converter
+---------------------------
+1. Visit: https://cloudconvert.com/png-to-icns
+2. Upload your PNG icon
+3. Download the .icns file
+4. Rename it to icon.icns and place it in this directory
+
+OPTION 4: Use a placeholder
+----------------------------
+If you don't have an icon yet, the build will work without it.
+The app will just use the default Python/application icon.
+
+For now, you can skip this step and the app will build successfully.
+You can add the icon later and rebuild.
+
+============================================
+After creating icon.icns, verify with:
+  ls -lh icon.icns
+  file icon.icns
+
+It should show: "Apple Icon Image format"
+============================================
+

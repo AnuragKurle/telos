@@ -1,0 +1,157 @@
+name: Build Desktop Apps
+
+on:
+  push:
+    branches: [ prod-monorepo ]  # Build on production branch
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ prod-monorepo ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      working-directory: ./client
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    
+    - name: Build Windows executable
+      working-directory: ./client
+      run: python build_installer.py
+    
+    - name: Get version
+      id: version
+      shell: bash
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        else
+          echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Upload Windows EXE
+      uses: actions/upload-artifact@v4
+      with:
+        name: Telos-Windows-${{ steps.version.outputs.version }}
+        path: |
+          client/dist/Telos.exe
+          client/dist/README.txt
+        if-no-files-found: error
+    
+    - name: Upload Windows Installer (if exists)
+      uses: actions/upload-artifact@v4
+      if: success()
+      continue-on-error: true
+      with:
+        name: Telos-Windows-Installer-${{ steps.version.outputs.version }}
+        path: client/dist/TelosSetup-*.exe
+        if-no-files-found: ignore
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      working-directory: ./client
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    
+    - name: Build macOS application
+      working-directory: ./client
+      run: python build_macos.py
+    
+    - name: Get version
+      id: version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        else
+          echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Verify build output
+      working-directory: ./client
+      run: |
+        ls -lh dist/
+        test -d dist/Telos.app || exit 1
+        echo "✅ Telos.app exists"
+    
+    - name: Upload macOS App Bundle
+      uses: actions/upload-artifact@v4
+      with:
+        name: Telos-macOS-App-${{ steps.version.outputs.version }}
+        path: client/dist/Telos.app
+        if-no-files-found: error
+    
+    - name: Upload macOS DMG
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: Telos-macOS-DMG-${{ steps.version.outputs.version }}
+        path: client/dist/*.dmg
+        if-no-files-found: error
+
+  create-release:
+    name: Create Release
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Get version
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    
+    - name: Display structure
+      run: ls -R artifacts/
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Telos ${{ steps.version.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          artifacts/**/*.exe
+          artifacts/**/*.dmg
+          artifacts/**/README.txt
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

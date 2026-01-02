@@ -245,6 +245,25 @@ def run_tui():
         print(f"Configuration error: {e}")
         return
 
+    # Check macOS permissions if on macOS
+    if sys.platform == 'darwin':
+        try:
+            from core.macos_permissions import check_permissions_silent, show_permission_instructions
+            status = check_permissions_silent()
+            if not status['screen_recording']:
+                show_permission_instructions("screen_recording")
+                print("\n❌ Telos cannot start without Screen Recording permission")
+                print("Please grant the permission and restart Telos\n")
+                return
+            if not status['accessibility']:
+                print("\n⚠️  Warning: Accessibility permission not granted")
+                print("Idle detection may not work correctly")
+                print("Press Enter to continue...")
+                input()
+        except ImportError:
+            # macos_permissions module not available, skip check
+            pass
+
     # Check if onboarding is needed
     from core.onboarding import OnboardingManager
     onboarding_mgr = OnboardingManager()
@@ -484,38 +503,74 @@ def test_email():
 
 
 def run_service_console():
-    """Run service in console mode (for testing before installing as Windows Service)."""
-    from service import run_console_mode
+    """Run service in console mode (for testing before installing as service)."""
+    if sys.platform == 'darwin':  # macOS
+        from service_macos import run_console_mode
+    elif sys.platform == 'win32':  # Windows
+        from service import run_console_mode
+    else:
+        print("Service mode not supported on this platform")
+        return
     run_console_mode()
 
 
 def install_service():
-    """Install Windows service."""
-    from service import install_service
+    """Install platform service (Windows Service or macOS LaunchAgent)."""
+    if sys.platform == 'darwin':  # macOS
+        from service_macos import install_service
+    elif sys.platform == 'win32':  # Windows
+        from service import install_service
+    else:
+        print("Service mode not supported on this platform")
+        return
     install_service()
 
 
 def uninstall_service():
-    """Uninstall Windows service."""
-    from service import uninstall_service
+    """Uninstall platform service."""
+    if sys.platform == 'darwin':  # macOS
+        from service_macos import uninstall_service
+    elif sys.platform == 'win32':  # Windows
+        from service import uninstall_service
+    else:
+        print("Service mode not supported on this platform")
+        return
     uninstall_service()
 
 
 def start_service():
-    """Start Windows service."""
-    from service import start_service
+    """Start platform service."""
+    if sys.platform == 'darwin':  # macOS
+        from service_macos import start_service
+    elif sys.platform == 'win32':  # Windows
+        from service import start_service
+    else:
+        print("Service mode not supported on this platform")
+        return
     start_service()
 
 
 def stop_service():
-    """Stop Windows service."""
-    from service import stop_service
+    """Stop platform service."""
+    if sys.platform == 'darwin':  # macOS
+        from service_macos import stop_service
+    elif sys.platform == 'win32':  # Windows
+        from service import stop_service
+    else:
+        print("Service mode not supported on this platform")
+        return
     stop_service()
 
 
 def service_status():
-    """Check Windows service status."""
-    from service import service_status
+    """Check platform service status."""
+    if sys.platform == 'darwin':  # macOS
+        from service_macos import service_status
+    elif sys.platform == 'win32':  # Windows
+        from service import service_status
+    else:
+        print("Service mode not supported on this platform")
+        return
     service_status()
 
 
