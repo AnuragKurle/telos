@@ -1,11 +1,42 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Loader2, Check } from "lucide-react";
 import { TypewriterEffect } from "./TypewriterEffect";
 import { TerminalFrame } from "./TerminalFrame";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export function Hero() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || status === "loading") return;
+
+    setStatus("loading");
+    setErrorMsg("");
+
+    try {
+      // Use email as document ID to prevent duplicates
+      const safeEmail = email.toLowerCase().trim();
+      await setDoc(doc(db, "waitlist", safeEmail), {
+        email: safeEmail,
+        timestamp: serverTimestamp(),
+        source: "landing_page",
+      });
+      setStatus("success");
+      setEmail("");
+    } catch (error: any) {
+      console.error("Error adding to waitlist:", error);
+      setStatus("error");
+      setErrorMsg(error?.message || "Connection failed");
+    }
+  };
+
   return (
     <section className="relative min-h-screen flex flex-col justify-center items-center px-4 py-20 overflow-hidden">
       {/* Background Grid */}
@@ -40,21 +71,44 @@ export function Hero() {
         </p>
 
         {/* Email CTA */}
-        <div className="flex flex-col sm:flex-row gap-3 justify-center items-center max-w-md mx-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center items-center max-w-md mx-auto w-full">
           <div className="relative w-full">
              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500 font-mono text-sm">
                 $
              </div>
              <input 
                 type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="enter_email_for_access" 
-                className="w-full pl-8 pr-4 py-3 bg-neutral-900 border border-neutral-800 rounded-md focus:outline-none focus:border-terminal-green focus:ring-1 focus:ring-terminal-green text-white font-mono placeholder:text-neutral-600 transition-all"
+                required
+                disabled={status === "loading" || status === "success"}
+                className="w-full pl-8 pr-4 py-3 bg-neutral-900 border border-neutral-800 rounded-md focus:outline-none focus:border-terminal-green focus:ring-1 focus:ring-terminal-green text-white font-mono placeholder:text-neutral-600 transition-all disabled:opacity-50"
              />
           </div>
-          <button className="w-full sm:w-auto px-6 py-3 bg-terminal-green text-black font-semibold rounded-md hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2">
-            Join Waitlist <ChevronRight className="w-4 h-4" />
+          <button 
+            type="submit"
+            disabled={status === "loading" || status === "success"}
+            className="w-full sm:w-auto px-6 py-3 bg-terminal-green text-black font-semibold rounded-md hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-w-[140px]"
+          >
+            {status === "loading" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : status === "success" ? (
+              <>
+                Joined <Check className="w-4 h-4" />
+              </>
+            ) : (
+              <>
+                Join Waitlist <ChevronRight className="w-4 h-4" />
+              </>
+            )}
           </button>
-        </div>
+        </form>
+        {status === "error" && (
+            <div className="text-xs text-red-500 mt-4 font-mono bg-red-950/30 px-3 py-2 rounded border border-red-900/50">
+              Error: {errorMsg || "Connection failed. Check your network."}
+            </div>
+        )}
         <p className="text-xs text-neutral-600 mt-4">
           Privacy-first architecture. Your data stays on your device.
         </p>

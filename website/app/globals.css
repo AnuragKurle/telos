@@ -11,9 +11,9 @@
   --color-terminal-dim: #525252;
 }
 
-:root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
 }
 
 body {

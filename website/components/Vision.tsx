@@ -32,7 +32,7 @@ export function Vision() {
         <div className="mb-16">
           <h2 className="text-3xl font-bold mb-4">Evolution of Assistance</h2>
           <p className="text-neutral-400">
-            We are building an agent that works for you, not an algorithm that works on you.
+            We are building an agent that works for you.
           </p>
         </div>
 

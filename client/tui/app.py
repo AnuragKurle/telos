@@ -9,7 +9,12 @@ from textual.reactive import reactive
 from utils.config_manager import ConfigManager
 from tui.workers import capture_worker_task, db_polling_worker
 from tui.workers.session_worker import session_worker_task
-from tui.screens import DashboardScreen, TimelineScreen, SummaryScreen, SettingsScreen, ChatScreen
+from tui.screens import (
+    DashboardScreen, TimelineScreen, SummaryScreen, SettingsScreen, ChatScreen,
+    HelpScreen, UpgradeScreen
+)
+from tui.widgets import TrialBanner
+from core.trial_manager import TrialManager
 
 
 class TelosApp(App):
@@ -79,6 +84,7 @@ class TelosApp(App):
         ("s", "show_summary", "Summary"),
         ("c", "show_settings", "Settings"),
         ("a", "show_chat", "AI Chat"),
+        ("h", "show_help", "Help"),
         ("q", "quit", "Quit"),
     ]
 
@@ -100,6 +106,10 @@ class TelosApp(App):
         self.db_worker = None
         self.session_worker = None
         self.email_worker_task = None
+        
+        # Trial manager
+        self.trial_manager = TrialManager(config, trial_duration_days=7)
+        self.trial_banner = None
 
     def on_mount(self) -> None:
         """Called when app is mounted - start background workers."""
@@ -108,6 +118,11 @@ class TelosApp(App):
 
         # Push the Dashboard screen
         self.push_screen(DashboardScreen())
+        
+        # Check for upgrade prompts
+        prompt_type = self.trial_manager.should_show_upgrade_prompt()
+        if prompt_type:
+            self.set_timer(2, lambda: self.push_screen(UpgradeScreen(self.trial_manager)))
 
         # Start background workers
         self.capture_worker = asyncio.create_task(capture_worker_task(self))
@@ -200,3 +215,7 @@ class TelosApp(App):
     def action_show_chat(self) -> None:
         """Show the AI chat screen."""
         self.push_screen(ChatScreen())
+    
+    def action_show_help(self) -> None:
+        """Show the help screen."""
+        self.push_screen(HelpScreen())

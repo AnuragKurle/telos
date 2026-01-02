@@ -7,7 +7,7 @@ It handles authentication, file uploads, rate limiting, and error handling.
 import requests
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from core.firebase_auth import FirebaseAuth, FirebaseAuthError
@@ -71,40 +71,66 @@ class BackendClient:
         try:
             response = requests.get(
                 f"{self.backend_url}/health",
-                timeout=5  # Quick timeout for health check
+                timeout=self.timeout  # Use configured timeout (health checks might be slow on cold start)
             )
             
             if response.status_code == 200:
-                return response.json()
+                try:
+                    return response.json()
+                except ValueError as e:
+                    raise BackendError(f"Invalid JSON response: {e}")
             else:
                 raise BackendError(f"Health check failed: {response.status_code}")
                 
         except requests.RequestException as e:
             raise BackendError(f"Backend unreachable: {e}")
+        except Exception as e:
+            # Catch any other unexpected exceptions
+            raise BackendError(f"Health check error: {type(e).__name__}: {e}")
+    
+    def test_connection(self) -> Dict[str, Any]:
+        """Test backend connection and return detailed status.
+        
+        Returns:
+            Dict with connection status:
+                - connected: bool
+                - service: str (service name)
+                - version: str (service version)
+                - error: str (error message if failed)
+        """
+        try:
+            health = self.check_health()
+            return {
+                'connected': True,
+                'service': health.get('service', 'unknown'),
+                'version': health.get('version', 'unknown'),
+                'timestamp': health.get('timestamp', ''),
+                'error': None
+            }
+        except BackendError as e:
+            return {
+                'connected': False,
+                'service': None,
+                'version': None,
+                'timestamp': None,
+                'error': str(e)
+            }
     
     def analyze_screenshot(
         self,
         image_path: str,
+        previous_captures: Optional[List[Dict]] = None,
         retry_auth: bool = True
     ) -> Dict[str, Any]:
         """Upload screenshot for analysis.
         
         Args:
             image_path: Path to screenshot image
+            previous_captures: List of previous captures for context
             retry_auth: Retry with fresh token if auth fails
             
         Returns:
-            Analysis result dict with keys:
-                - category: Activity category
-                - app: Application name
-                - task: Task description
-                - confidence: Confidence score
-                - detailed_context: Additional context (optional)
-            
-        Raises:
-            BackendError: If upload fails
-            RateLimitError: If rate limit exceeded
-            AuthenticationError: If authentication fails
+            Analysis result dict
         """
         # Apply client-side rate limiting
         self._apply_rate_limit()
@@ -122,8 +148,13 @@ class BackendClient:
         
         # Upload request
         try:
+            import json
             with open(image_path, 'rb') as img_file:
                 files = {'image': (image_path.name, img_file, 'image/png')}
+                data = {}
+                if previous_captures:
+                    data['previous_context'] = json.dumps(previous_captures)
+                
                 headers = {
                     'Authorization': f'Bearer {token}',
                     'X-Client-Version': self.CLIENT_VERSION,
@@ -132,6 +163,7 @@ class BackendClient:
                 response = requests.post(
                     f"{self.backend_url}/v1/analyze/screenshot",
                     files=files,
+                    data=data,
                     headers=headers,
                     timeout=self.timeout
                 )

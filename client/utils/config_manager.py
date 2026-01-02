@@ -8,6 +8,9 @@ from typing import Dict, Any
 
 class ConfigManager:
     """Manages loading and saving configuration."""
+    
+    # Config schema version
+    CURRENT_VERSION = 2  # Version 2 adds backend, trial, account sections
 
     def __init__(self, config_path: str = "config.yaml"):
         self.config_path = Path(config_path)
@@ -24,8 +27,10 @@ class ConfigManager:
         with open(self.config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
+        self._migrate_config()
         self._validate_config()
         self._expand_paths()
+        self._set_defaults()
         return self.config
 
     def save(self, config: Dict[str, Any]) -> None:
@@ -58,6 +63,71 @@ class ConfigManager:
                 "Please set your Gemini API key in config.yaml\n"
                 "Get your API key from: https://aistudio.google.com/app/apikey"
             )
+
+    def _migrate_config(self) -> None:
+        """Migrate configuration from older versions to current schema."""
+        current_version = self.config.get('schema_version', 1)
+        
+        if current_version >= self.CURRENT_VERSION:
+            return  # Already at current version
+        
+        # Migration from v1 to v2: Add backend, trial, account sections
+        if current_version == 1:
+            print("Migrating configuration to version 2...")
+            
+            # Add backend section if missing
+            if 'backend' not in self.config:
+                self.config['backend'] = {
+                    'enabled': False,
+                    'url': "",
+                    'fallback_to_local': True,
+                }
+            
+            # Add trial section if missing
+            if 'trial' not in self.config:
+                self.config['trial'] = {
+                    'start_date': "",
+                    'duration_days': 7,
+                    'upgrade_prompts_shown': 0,
+                }
+            
+            # Add account section if missing
+            if 'account' not in self.config:
+                self.config['account'] = {
+                    'auth_type': "anonymous",
+                    'user_id': "",
+                    'email': "",
+                }
+            
+            # Update version
+            self.config['schema_version'] = 2
+            
+            # Save migrated config
+            self.save(self.config)
+            print("Configuration migrated successfully.")
+    
+    def _set_defaults(self) -> None:
+        """Set default values for optional fields."""
+        # Ensure backend section has all fields
+        backend = self.config.get('backend', {})
+        backend.setdefault('enabled', False)
+        backend.setdefault('url', "")
+        backend.setdefault('fallback_to_local', True)
+        self.config['backend'] = backend
+        
+        # Ensure trial section has all fields
+        trial = self.config.get('trial', {})
+        trial.setdefault('start_date', "")
+        trial.setdefault('duration_days', 7)
+        trial.setdefault('upgrade_prompts_shown', 0)
+        self.config['trial'] = trial
+        
+        # Ensure account section has all fields
+        account = self.config.get('account', {})
+        account.setdefault('auth_type', "anonymous")
+        account.setdefault('user_id', "")
+        account.setdefault('email', "")
+        self.config['account'] = account
 
     def _expand_paths(self) -> None:
         """Expand ~ and environment variables in paths."""

@@ -10,6 +10,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { initializeFirebase } from './config/firebase.js';
 import analyzeRoutes from './routes/analyze.js';
+import authRoutes from './routes/auth.js';
 
 // Load environment variables
 dotenv.config();
@@ -46,6 +47,7 @@ app.get('/', (req, res) => {
 
 // API routes
 app.use('/v1/analyze', analyzeRoutes);
+app.use('/v1/auth', authRoutes);
 
 // 404 handler
 app.use((req, res) => {

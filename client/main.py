@@ -245,6 +245,19 @@ def run_tui():
         print(f"Configuration error: {e}")
         return
 
+    # Check if onboarding is needed
+    from core.onboarding import OnboardingManager
+    onboarding_mgr = OnboardingManager()
+    
+    if onboarding_mgr.is_first_run():
+        print("First run detected - starting onboarding...")
+        run_onboarding(config, onboarding_mgr)
+        
+        # Check if onboarding was completed
+        if not onboarding_mgr.is_onboarding_complete():
+            print("Onboarding cancelled.")
+            return
+
     # Import here to avoid loading Textual if not needed
     from tui.app import TelosApp
 
@@ -504,6 +517,106 @@ def service_status():
     """Check Windows service status."""
     from service import service_status
     service_status()
+
+
+def run_onboarding(config, onboarding_mgr):
+    """Run the onboarding flow in TUI.
+    
+    Args:
+        config: ConfigManager instance
+        onboarding_mgr: OnboardingManager instance
+    """
+    from textual.app import App
+    from tui.screens import (
+        WelcomeScreen, PrivacyNoticeScreen, GoalSetupScreen, 
+        EmailSetupScreen, OnboardingCompleteScreen
+    )
+    from core.trial_manager import TrialManager
+    from core.backend_client import BackendClient
+    from core.firebase_auth import FirebaseAuth
+    from core.goal_manager import AnalysisGoalManager
+    from core.database import Database
+    
+    class OnboardingApp(App):
+        """Temporary app for onboarding flow."""
+        
+        def __init__(self, config, onboarding_mgr):
+            super().__init__()
+            self.config = config
+            self.onboarding_mgr = onboarding_mgr
+            self.trial_manager = TrialManager(config, trial_duration_days=7)
+        
+        def on_mount(self) -> None:
+            """Start onboarding flow in a worker."""
+            self.run_worker(self.run_onboarding_flow(), exclusive=True)
+        
+        async def run_onboarding_flow(self) -> None:
+            """Run the complete onboarding flow."""
+            # Welcome screen
+            result = await self.push_screen_wait(WelcomeScreen())
+            if not result:
+                self.exit()
+                return
+            
+            # Privacy notice
+            result = await self.push_screen_wait(PrivacyNoticeScreen())
+            if not result:
+                self.exit()
+                return
+            
+            # Start trial
+            self.trial_manager.start_trial()
+            
+            # Backend connection test (if enabled)
+            backend_enabled = self.config.get('backend', 'enabled', default=False)
+            if backend_enabled:
+                backend_url = self.config.get('backend', 'url', default="")
+                if backend_url:
+                    try:
+                        # Test connection without auth
+                        import requests
+                        response = requests.get(f"{backend_url}/health", timeout=5)
+                        if response.status_code == 200:
+                            self.notify("✓ Backend connected successfully", severity="information")
+                        else:
+                            self.notify("⚠ Backend connection failed - using local mode", severity="warning")
+                    except:
+                        self.notify("⚠ Backend unreachable - using local mode", severity="warning")
+            
+            # Optional: Goals setup
+            goal_result = await self.push_screen_wait(GoalSetupScreen())
+            if goal_result:
+                db = Database(self.config.get('storage', 'database_path'))
+                goal_manager = AnalysisGoalManager(db)
+                goal_manager.set_goals(
+                    goal_result['goal'], 
+                    goal_result.get('custom_text')
+                )
+                self.notify("✓ Goals configured", severity="success")
+            
+            # Optional: Email setup
+            email_result = await self.push_screen_wait(EmailSetupScreen())
+            if email_result:
+                email_config = self.config.config.get('email', {})
+                email_config['enabled'] = True
+                email_config['sender_email'] = email_result['email']
+                email_config['recipient_email'] = email_result['email']
+                email_config['sender_password'] = email_result['password']
+                email_config['send_time'] = email_result['send_time']
+                self.config.config['email'] = email_config
+                self.config.save(self.config.config)
+                self.notify("✓ Email configured", severity="success")
+            
+            # Completion screen
+            await self.push_screen_wait(OnboardingCompleteScreen())
+            
+            # Mark onboarding complete
+            self.onboarding_mgr.mark_complete()
+            
+            self.exit()
+    
+    app = OnboardingApp(config, onboarding_mgr)
+    app.run()
 
 
 def show_usage():

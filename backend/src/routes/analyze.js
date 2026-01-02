@@ -41,8 +41,18 @@ router.post(
       // Log request (without logging image data)
       console.log(`[Analysis] User: ${req.user.uid}, File: ${req.file.originalname}, Size: ${req.file.size} bytes`);
 
+      // Parse previous context if provided
+      let previousCaptures = [];
+      if (req.body.previous_context) {
+        try {
+          previousCaptures = JSON.parse(req.body.previous_context);
+        } catch (e) {
+          console.warn('[Analysis] Failed to parse previous_context:', e.message);
+        }
+      }
+
       // Analyze screenshot
-      const analysis = await analyzeScreenshot(req.file.buffer, req.file.mimetype);
+      const analysis = await analyzeScreenshot(req.file.buffer, req.file.mimetype, previousCaptures);
 
       // Return analysis result
       res.status(200).json(analysis);

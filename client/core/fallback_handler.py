@@ -48,6 +48,7 @@ class FallbackHandler:
         self._last_health_check = 0
         self._consecutive_failures = 0
         self._max_failures_before_disable = 3
+        self._retry_interval = 30  # Retry sooner (30s) if backend is just temporarily down
         
         # Statistics
         self.stats = {
@@ -58,7 +59,15 @@ class FallbackHandler:
             'rate_limit_hits': 0,
             'fallback_count': 0,
         }
-    
+        
+        # NOTE: We do NOT perform an initial health check here anymore.
+        # It blocks the main thread if initialized in the main loop.
+        # Instead, we let the first analyze_screenshot() call trigger it
+        # (which is usually called in a worker thread).
+        if (self.backend_client and 
+            self.fallback_mode == FallbackMode.AUTO):
+            print("[Fallback Handler] Initialized in AUTO mode (waiting for first request to check health)")
+
     def analyze_screenshot(
         self,
         image_path: str,
@@ -79,7 +88,7 @@ class FallbackHandler:
         if use_backend and self.backend_client:
             try:
                 # Try backend first
-                result = self._analyze_with_backend(image_path)
+                result = self._analyze_with_backend(image_path, previous_captures)
                 self._on_backend_success()
                 return result
                 
@@ -129,11 +138,21 @@ class FallbackHandler:
         if self._backend_available is False:
             # Too many consecutive failures, check if it's time to retry
             if self._consecutive_failures >= self._max_failures_before_disable:
-                if time.time() - self._last_health_check < self.health_check_interval:
-                    return False  # Don't retry yet
-        
+                time_since_check = time.time() - self._last_health_check
+                if time_since_check < self.health_check_interval:
+                    return False  # Don't retry yet (long wait)
+            else:
+                # Backend failed recently, but not enough to disable. 
+                # Retry sooner (short wait)
+                time_since_check = time.time() - self._last_health_check
+                if time_since_check < self._retry_interval:
+                    return False
+
         # Periodic health check (if we haven't checked recently)
-        if time.time() - self._last_health_check > self.health_check_interval:
+        # Use health_check_interval if healthy, or retry_interval if failing but not disabled
+        interval = self.health_check_interval if self._backend_available else self._retry_interval
+        
+        if time.time() - self._last_health_check > interval:
             self._check_backend_health()
         
         # Use backend if available or if we don't know yet
@@ -142,27 +161,45 @@ class FallbackHandler:
     def _check_backend_health(self) -> None:
         """Check backend health and update status."""
         try:
-            self.backend_client.check_health()
+            health_result = self.backend_client.check_health()
             self._backend_available = True
             self._consecutive_failures = 0
-            print("[OK] Backend health check passed")
-        except BackendError:
+            service = health_result.get('service', 'backend')
+            version = health_result.get('version', 'unknown')
+            print(f"[OK] Backend health check passed - using backend API at {self.backend_client.backend_url}")
+            print(f"     Service: {service} v{version}")
+        except BackendError as e:
             self._backend_available = False
-            print("[FAIL] Backend health check failed")
+            self._consecutive_failures += 1
+            print(f"[FAIL] Backend health check failed: {e}")
+            if self.fallback_mode == FallbackMode.AUTO:
+                print(f"       Falling back to local Gemini analysis")
+        except Exception as e:
+            # Catch any unexpected exceptions (shouldn't happen, but be safe)
+            self._backend_available = False
+            self._consecutive_failures += 1
+            print(f"[FAIL] Unexpected error during health check: {type(e).__name__}: {e}")
+            if self.fallback_mode == FallbackMode.AUTO:
+                print(f"       Falling back to local Gemini analysis")
         finally:
             self._last_health_check = time.time()
     
-    def _analyze_with_backend(self, image_path: str) -> Dict[str, Any]:
+    def _analyze_with_backend(
+        self,
+        image_path: str,
+        previous_captures: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
         """Analyze using backend API.
         
         Args:
             image_path: Path to screenshot
+            previous_captures: Previous captures for context
             
         Returns:
             Analysis result
         """
         self.stats['backend_requests'] += 1
-        result = self.backend_client.analyze_screenshot(image_path)
+        result = self.backend_client.analyze_screenshot(image_path, previous_captures)
         
         # Add metadata
         result['_source'] = 'backend'

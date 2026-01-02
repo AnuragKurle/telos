@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_ID="gen-lang-client-0772617718"
 SERVICE_NAME="telos-backend"
-REGION="us-central1"
+REGION="asia-south1"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 
 echo -e "${BLUE}🚀 Telos Backend Deployment${NC}"

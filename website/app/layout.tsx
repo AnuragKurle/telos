@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Telos | AI Work Journal",
-  description: "Privacy-first AI work journal that remembers everything you did.",
+  title: "Telos | Intent-First Productivity",
+  description: "Privacy-first productivity assistant that aligns your screen time with your goals.",
 };
 
 export default function RootLayout({

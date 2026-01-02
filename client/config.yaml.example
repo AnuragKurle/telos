@@ -35,3 +35,20 @@ email:
   sender_password: "your-app-password"
   recipient_email: "your-email@gmail.com"
   send_time: "21:00"
+
+backend:
+  enabled: false
+  url: ""
+  fallback_to_local: true
+
+trial:
+  start_date: ""
+  duration_days: 7
+  upgrade_prompts_shown: 0
+
+account:
+  auth_type: "anonymous"
+  user_id: ""
+  email: ""
+
+schema_version: 2
