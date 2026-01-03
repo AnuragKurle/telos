@@ -7,6 +7,7 @@ from rich.style import Style
 from datetime import datetime, timedelta
 from core.database import Database
 from typing import List, Dict, Tuple
+import asyncio
 import math
 
 class ActivityWaveform(Widget):
@@ -40,14 +41,14 @@ class ActivityWaveform(Widget):
         # Data refresh: query database every 5 seconds
         self.set_interval(5.0, self.refresh_activity_data)
         
-        # Initial load
-        self.refresh_activity_data()
+        # Initial load in a background task
+        self.run_worker(self.refresh_activity_data())
 
-    def refresh_activity_data(self):
+    async def refresh_activity_data(self):
         """Query recent captures from database."""
         try:
-            # Request 1 hour of history
-            raw_captures = self.db.get_recent_captures(hours=1, limit=1000)
+            # Request 1 hour of history - run in thread to avoid blocking UI
+            raw_captures = await asyncio.to_thread(self.db.get_recent_captures, hours=1, limit=1000)
             self.captures = raw_captures
         except Exception:
             self.captures = []

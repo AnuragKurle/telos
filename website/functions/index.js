@@ -1,8 +1,12 @@
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const axios = require("axios");
 
 admin.initializeApp();
+
+// Define secrets
+const slackWebhook = defineSecret("SLACK_WEBHOOK");
 
 /**
  * Triggered when a new document is added to the 'waitlist' collection.
@@ -11,7 +15,8 @@ admin.initializeApp();
 exports.notifySlackOnWaitlist = onDocumentCreated(
   {
     document: "waitlist/{email}",
-    region: "asia-south1"
+    region: "asia-south1",
+    secrets: [slackWebhook]
   },
   async (event) => {
     const data = event.data.data();
@@ -19,32 +24,21 @@ exports.notifySlackOnWaitlist = onDocumentCreated(
     const source = data.source || "unknown";
     const channelId = "C0A6L5K9Z0U";
 
-    // Access Slack config from environment variables
-    // Set using: firebase functions:secrets:set SLACK_TOKEN
-    const botToken = process.env.SLACK_TOKEN;
-    const webhookUrl = process.env.SLACK_WEBHOOK;
+    // Access Slack webhook from secret
+    const webhookUrl = slackWebhook.value();
 
     try {
       const message = {
         text: `🚀 *New Waitlist Sign-up!*\n*Email:* \`${email}\`\n*Source:* ${source}`
       };
 
-      if (botToken) {
-        // Option 1: Using Slack Bot Token (Web API) - Posts to specific channel
-        await axios.post("https://slack.com/api/chat.postMessage", {
-          channel: channelId,
-          ...message
-        }, {
-          headers: { "Authorization": `Bearer ${botToken}` }
-        });
-        console.log(`✅ Slack alert sent via Bot API for ${email}`);
-      } else if (webhookUrl) {
-        // Option 2: Using Slack Webhook (Posts to channel configured in Slack)
+      if (webhookUrl) {
+        // Send notification via Slack Webhook
         await axios.post(webhookUrl, message);
         console.log(`✅ Slack alert sent via Webhook for ${email}`);
       } else {
-        console.error("❌ Slack alert failed: No SLACK_TOKEN or SLACK_WEBHOOK environment variable found.");
-        console.error("Set it using: firebase functions:secrets:set SLACK_TOKEN");
+        console.error("❌ Slack alert failed: No SLACK_WEBHOOK secret found.");
+        console.error("Set it using: firebase functions:secrets:set SLACK_WEBHOOK");
       }
     } catch (error) {
       console.error("❌ Error sending Slack notification:", error.response?.data || error.message);

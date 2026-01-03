@@ -22,8 +22,8 @@ async def db_polling_worker(app):
     try:
         while not app.shutting_down:
             try:
-                # Get today's stats
-                stats = db.get_today_stats()
+                # Get today's stats - run in thread to avoid blocking UI
+                stats = await asyncio.to_thread(db.get_today_stats)
                 app.total_captures = stats['total_captures']
                 app.work_seconds = stats['work']
                 app.learning_seconds = stats['learning']
@@ -32,11 +32,11 @@ async def db_polling_worker(app):
                 app.idle_seconds_total = stats['idle']
 
                 # Get API usage
-                api_usage = db.get_api_usage_today()
+                api_usage = await asyncio.to_thread(db.get_api_usage_today)
                 app.api_calls_used = api_usage
 
                 # Get recent captures for timeline
-                recent = db.get_recent_captures(hours=2, limit=5)
+                recent = await asyncio.to_thread(db.get_recent_captures, hours=2, limit=5)
                 app.recent_captures = recent
 
             except Exception as e:
