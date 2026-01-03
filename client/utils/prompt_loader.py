@@ -112,13 +112,32 @@ Important:
 - If asked to generate content, make it polished and ready to use"""
     }
 
-    def __init__(self, prompts_dir: str = "prompts"):
+    def __init__(self, prompts_dir: str = None):
         """Initialize prompt loader.
 
         Args:
-            prompts_dir: Directory containing prompt files
+            prompts_dir: Directory containing prompt files. If None, searches
+                        standard locations (./prompts, ~/.telos/prompts)
         """
-        self.prompts_dir = Path(prompts_dir)
+        if prompts_dir is not None:
+            self.prompts_dir = Path(prompts_dir)
+        else:
+            self.prompts_dir = self._find_prompts_dir()
+    
+    def _find_prompts_dir(self) -> Path:
+        """Find prompts directory in standard locations."""
+        # Check current directory first (development mode)
+        cwd_prompts = Path("prompts")
+        if cwd_prompts.exists():
+            return cwd_prompts
+        
+        # Check user data directory (pip install mode)
+        user_prompts = Path.home() / ".telos" / "prompts"
+        if user_prompts.exists():
+            return user_prompts
+        
+        # Default to current directory (will use hardcoded defaults)
+        return cwd_prompts
 
     def load_prompt(self, prompt_name: str, variables: Optional[Dict[str, str]] = None) -> str:
         """Load prompt from file and optionally substitute variables.

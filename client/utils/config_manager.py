@@ -154,8 +154,36 @@ class ConfigManager:
         return value
 
 
-def load_config(config_path: str = "config.yaml") -> ConfigManager:
-    """Load configuration from file."""
+def find_config_path() -> Path:
+    """Find config.yaml in standard locations.
+    
+    Search order:
+    1. Current working directory (for development)
+    2. User data directory (~/.telos/)
+    """
+    # Check current directory first (development mode)
+    cwd_config = Path("config.yaml")
+    if cwd_config.exists():
+        return cwd_config
+    
+    # Check user data directory (pip install mode)
+    user_config = Path.home() / ".telos" / "config.yaml"
+    if user_config.exists():
+        return user_config
+    
+    # Default to user config path (will show helpful error)
+    return user_config
+
+
+def load_config(config_path: str = None) -> ConfigManager:
+    """Load configuration from file.
+    
+    Args:
+        config_path: Optional explicit path. If None, searches standard locations.
+    """
+    if config_path is None:
+        config_path = str(find_config_path())
+    
     manager = ConfigManager(config_path)
     manager.load()
     return manager
