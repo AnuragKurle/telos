@@ -136,7 +136,16 @@ https://pypi.org/project/telos-tracker/0.1.1/
 ```bash
 pip install telos-tracker
 telos --version
+
+# If "telos is unrecognized", try:
+python -m telos_tracker.cli --version
+
+# Or use pipx (recommended):
+pipx install telos-tracker
+telos --version
 ```
+
+**Note:** Some users may need to add Python's Scripts directory to PATH or restart their terminal. See `INSTALLATION_TROUBLESHOOTING.md` for details.
 
 ## Git Version Control for Releases
 

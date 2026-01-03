@@ -273,6 +273,12 @@ TUI Keyboard Shortcuts:
     A - AI Chat    |  G - Goals     |  H - Help
     Q - Quit
 
+Troubleshooting:
+    If 'telos' command is not found after pip install:
+    1. Run: python -m telos_tracker.cli
+    2. Or add Python Scripts directory to PATH and restart terminal
+    3. Or install via: pipx install telos-tracker
+
 Note: The TUI requires a graphical environment. For headless servers,
 use the setup command only, then run the tracker on a local machine.
 
