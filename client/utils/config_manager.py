@@ -122,6 +122,14 @@ class ConfigManager:
         backend.setdefault('fallback_to_local', True)
         self.config['backend'] = backend
         
+        # Ensure firebase section exists (for backend authentication)
+        # This is critical for SaaS mode to work
+        firebase = self.config.get('firebase', {})
+        firebase.setdefault('api_key', "AIzaSyCf-aFrlhUGpPP09cQIYDC052wXyYPnHk8")
+        firebase.setdefault('auth_domain', "gen-lang-client-0772617718.firebaseapp.com")
+        firebase.setdefault('project_id', "gen-lang-client-0772617718")
+        self.config['firebase'] = firebase
+        
         # Ensure trial section has all fields
         trial = self.config.get('trial', {})
         trial.setdefault('start_date', "")

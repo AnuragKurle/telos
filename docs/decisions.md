@@ -2,6 +2,18 @@
 
 Key technical decisions and their rationale.
 
+## [2026-01-03] Firebase Config in Client (v0.1.5)
+
+**Decision:** Embed Firebase Web API Key directly in client config templates.
+
+**Why:**
+- Firebase Web API Keys are public by design (used in all web/mobile apps)
+- Security comes from backend token verification + Firestore Security Rules
+- Actual Gemini API key stays in Secret Manager on backend (never exposed)
+- Fixes v0.1.4 bug where missing Firebase config broke backend authentication
+
+**Implementation:** Added Firebase section with Web API Key to `cli.py`, `config.yaml.example`, and auto-migration in `config_manager.py`.
+
 ## Authentication: Firebase Anonymous-First
 
 **Decision:** Users start with anonymous Firebase auth, no signup required.

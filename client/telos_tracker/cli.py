@@ -117,6 +117,11 @@ email:
   recipient_email: ""
   send_time: "21:00"
 
+firebase:
+  api_key: "AIzaSyCf-aFrlhUGpPP09cQIYDC052wXyYPnHk8"
+  auth_domain: "gen-lang-client-0772617718.firebaseapp.com"
+  project_id: "gen-lang-client-0772617718"
+
 backend:
   enabled: true
   url: "https://telos-backend-ae7k4avtpq-el.a.run.app"
@@ -218,6 +223,13 @@ def interactive_setup():
         config['backend']['fallback_to_local'] = False
         # Set placeholder API key (not used in backend mode)
         config['gemini']['api_key'] = "BACKEND_MODE_NO_KEY_NEEDED"
+        
+        # Add Firebase configuration for backend authentication
+        if 'firebase' not in config:
+            config['firebase'] = {}
+        config['firebase']['api_key'] = "AIzaSyCf-aFrlhUGpPP09cQIYDC052wXyYPnHk8"
+        config['firebase']['auth_domain'] = "gen-lang-client-0772617718.firebaseapp.com"
+        config['firebase']['project_id'] = "gen-lang-client-0772617718"
         
         print("[OK] Backend configured: https://telos-backend-ae7k4avtpq-el.a.run.app")
     else:
