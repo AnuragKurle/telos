@@ -170,9 +170,38 @@ python create_icns.py your-icon.png
 
 ## Troubleshooting
 
+**"telos is unrecognized" after pip install**
+
+If you get "command not found" or "telos is unrecognized" after installing:
+
+1. **Check if it's installed:**
+   ```bash
+   pip show telos-tracker
+   ```
+
+2. **Try running via Python module:**
+   ```bash
+   python -m telos_tracker.cli help
+   ```
+
+3. **Add Python Scripts to PATH:**
+   - **Windows:** Add `C:\Users\<YourUser>\AppData\Local\Programs\Python\Python3xx\Scripts` to PATH
+   - **Mac/Linux:** Add `~/.local/bin` to PATH in `~/.bashrc` or `~/.zshrc`:
+     ```bash
+     export PATH="$HOME/.local/bin:$PATH"
+     ```
+
+4. **Restart your terminal** after modifying PATH
+
+5. **Or use pipx (recommended for CLI tools):**
+   ```bash
+   pipx install telos-tracker
+   telos help
+   ```
+
 **Configuration Issues**
-- Run `python main.py setup` for guided configuration
-- Check `config.yaml` for correct API key
+- Run `telos setup` (or `python main.py setup`) for guided configuration
+- Check `~/.telos/config.yaml` for correct API key
 
 **API Quota**
 - Free tier: 1500 requests/day
