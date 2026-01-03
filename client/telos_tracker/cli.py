@@ -78,9 +78,9 @@ def copy_default_config():
         shutil.copy(example_config, user_config)
         print(f"Created config at: {user_config}")
     else:
-        # Create minimal config
+        # Create minimal config with backend enabled by default (SaaS mode)
         minimal_config = '''gemini:
-  api_key: "YOUR_GEMINI_API_KEY_HERE"
+  api_key: "BACKEND_MODE_NO_KEY_NEEDED"
   model: "gemini-2.5-flash"
 
 capture:
@@ -118,9 +118,9 @@ email:
   send_time: "21:00"
 
 backend:
-  enabled: false
-  url: ""
-  fallback_to_local: true
+  enabled: true
+  url: "https://telos-backend-ae7k4avtpq-el.a.run.app"
+  fallback_to_local: false
 
 trial:
   start_date: ""
