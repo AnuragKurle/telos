@@ -248,15 +248,19 @@ def interactive_setup():
 
 def show_help():
     """Show help information."""
-    print("""
-Telos - AI-powered activity tracking
+    from telos_tracker import __version__
+    print(f"""
+Telos - AI-powered activity tracking (v{__version__})
 
 Usage:
     telos              - Launch TUI interface
     telos setup        - First-time setup (configure API key)
-    telos test         - Test capture loop
-    telos stats        - Show today's statistics
+    telos --version    - Show version number
     telos help         - Show this help message
+
+Setup Commands (for development/testing):
+    telos test         - Test capture loop (requires display)
+    telos stats        - Show today's statistics
 
 Data Location:
     ~/.telos/          - User data directory
@@ -269,12 +273,21 @@ TUI Keyboard Shortcuts:
     A - AI Chat    |  G - Goals     |  H - Help
     Q - Quit
 
-For more information: https://github.com/yourusername/telos
+Note: The TUI requires a graphical environment. For headless servers,
+use the setup command only, then run the tracker on a local machine.
+
+For more information: https://github.com/AnuragKurle/telos
 """)
 
 
 def main():
     """Main CLI entry point."""
+    # Handle version flag
+    if len(sys.argv) > 1 and sys.argv[1].lower() in ('--version', '-v', 'version'):
+        from telos_tracker import __version__
+        print(f"telos-tracker {__version__}")
+        return
+    
     # Handle help before setting up environment
     if len(sys.argv) > 1 and sys.argv[1].lower() in ('help', '--help', '-h'):
         show_help()
@@ -299,6 +312,22 @@ def main():
         else:
             print("\nRun 'telos setup' when ready to configure.")
             return
+    
+    # Check if we're in a headless environment
+    display_available = os.environ.get('DISPLAY') or sys.platform == 'win32'
+    if not display_available:
+        print("Error: Telos TUI requires a graphical environment.")
+        print("\nYou appear to be in a headless environment (no display detected).")
+        print("\nTelos is a desktop application that requires:")
+        print("  - A terminal with display capabilities")
+        print("  - Ability to capture screenshots")
+        print("  - Keyboard/mouse input detection")
+        print("\nTo use Telos:")
+        print("  1. Install on your local machine (Windows/macOS/Linux desktop)")
+        print("  2. Run: telos setup")
+        print("  3. Run: telos")
+        print("\nFor testing setup only, use: telos setup")
+        return
     
     # Import main module and delegate
     try:

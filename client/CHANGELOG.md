@@ -30,6 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI entry point with user directory handling
 - Bundled prompts and configuration templates
 
+## [0.1.2] - 2026-01-03
+
+### Added
+- `telos --version` command to check installed version
+- Headless environment detection with helpful error message
+
+### Fixed
+- Error when running `telos --version` in headless environments
+- Better error messaging for users trying to run TUI without display
+
+### Changed
+- Help text now shows version number and clearer usage instructions
+
 ## [0.1.1] - 2026-01-03
 
 ### Fixed

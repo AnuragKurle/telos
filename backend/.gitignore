@@ -6,6 +6,16 @@ node_modules/
 .env.local
 .env.*.local
 
+# Secrets (never commit these)
+firebase-credentials.json
+service-account-key.json
+*.pem
+*.key
+
+# Build output
+dist/
+build/
+
 # Logs
 logs/
 *.log
@@ -21,10 +31,10 @@ Thumbs.db
 *.swp
 *.swo
 
-# Build outputs
-dist/
-build/
+# Test coverage
+coverage/
 
-# Google Cloud
-service-account-key.json
-*.json.enc
+# Temporary files
+tmp/
+temp/
+*.tmp
