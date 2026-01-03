@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-01-03
+
+### Fixed
+- **CRITICAL**: Backend connection failure after pip install - Missing Firebase configuration in setup wizard
+  - Added Firebase section to minimal config creation in `cli.py`
+  - Added Firebase config to interactive setup wizard (SaaS mode)
+  - Added auto-migration in ConfigManager to add Firebase section to existing configs
+  - Updated `config.yaml.example` with Firebase section
+  - Created `fix_backend_config.py` script for users with broken configs
+  - See `docs/RCA_BACKEND_CONNECTION_ISSUE.md` for full analysis
+
+### Added
+- Quick fix script (`fix_backend_config.py`) for users with v0.1.4 configs
+- Comprehensive RCA document for backend connection issue
+
 ## [0.1.4] - 2026-01-03
 
 ### Fixed
