@@ -1,5 +1,9 @@
 # Telos
 
+[![PyPI version](https://badge.fury.io/py/telos-tracker.svg)](https://pypi.org/project/telos-tracker/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 AI-powered screen time tracker with intelligent activity analysis.
 
 ## What It Does
@@ -17,7 +21,15 @@ Telos captures screenshots, analyzes them with Gemini Vision AI, and gives you i
 
 ## Quick Start
 
-### Desktop App (Python)
+### Option 1: pip install (Recommended)
+
+```bash
+pip install telos-tracker
+telos setup
+telos
+```
+
+### Option 2: From Source
 
 ```bash
 cd client
@@ -84,8 +96,15 @@ telos/
 
 ## Links
 
+- **PyPI Package**: https://pypi.org/project/telos-tracker/
 - **Backend**: https://telos-backend-ae7k4avtpq-el.a.run.app
 - **Firebase**: gen-lang-client-0772617718
+
+## For Developers
+
+- **Publishing to PyPI**: See [client/QUICKSTART_PUBLISHING.md](client/QUICKSTART_PUBLISHING.md)
+- **Release Management**: See [docs/releases.md](docs/releases.md)
+- **Full Publishing Guide**: See [client/PUBLISHING.md](client/PUBLISHING.md)
 
 ## License
 

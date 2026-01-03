@@ -4,6 +4,18 @@ This is the Telos desktop client - a Python TUI application for tracking screen 
 
 ## Quick Start
 
+### Option 1: pip install (Recommended)
+
+```bash
+pip install telos-tracker
+telos setup
+telos
+```
+
+Your data is stored in `~/.telos/`.
+
+### Option 2: From Source (Development)
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
