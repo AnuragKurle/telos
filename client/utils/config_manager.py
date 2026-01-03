@@ -58,11 +58,18 @@ class ConfigManager:
             if field not in config_section:
                 raise ValueError(f"Missing required config field: {'.'.join(path + [field])}")
 
-        if self.config['gemini']['api_key'] == "YOUR_GEMINI_API_KEY_HERE":
-            raise ValueError(
-                "Please set your Gemini API key in config.yaml\n"
-                "Get your API key from: https://aistudio.google.com/app/apikey"
-            )
+        # Only validate API key if backend is disabled (local mode)
+        backend_enabled = self.config.get('backend', {}).get('enabled', False)
+        api_key = self.config['gemini']['api_key']
+        
+        if not backend_enabled:
+            # Local mode - API key is required
+            if api_key in ("YOUR_GEMINI_API_KEY_HERE", "BACKEND_MODE_NO_KEY_NEEDED", ""):
+                raise ValueError(
+                    "Local mode requires a Gemini API key.\n"
+                    "Run 'telos setup' to configure, or enable backend mode.\n"
+                    "Get API key from: https://aistudio.google.com/app/apikey"
+                )
 
     def _migrate_config(self) -> None:
         """Migrate configuration from older versions to current schema."""

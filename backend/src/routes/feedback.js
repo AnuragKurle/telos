@@ -76,13 +76,29 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
       }
     }
 
-    // Send asynchronously - don't wait for Slack to respond to the user
-    sendSlackNotification(channelId, slackMessage, blocks);
+    // Send to Slack and track the result
+    const slackResult = await sendSlackNotification(channelId, slackMessage, blocks);
+    
+    // Update Firestore with Slack delivery status
+    await feedbackRef.update({
+      slack_notification: {
+        sent: slackResult.success,
+        method: slackResult.method || null,
+        error: slackResult.error || null,
+        timestamp: new Date()
+      }
+    });
+
+    // Log if Slack failed (but still return success to user since feedback is saved)
+    if (!slackResult.success) {
+      console.error(`⚠️ Feedback ${feedbackRef.id} saved but Slack notification failed:`, slackResult.error);
+    }
 
     return res.status(201).json({
       success: true,
       message: 'Feedback submitted successfully',
-      feedback_id: feedbackRef.id
+      feedback_id: feedbackRef.id,
+      slack_notified: slackResult.success  // Let client know if Slack worked
     });
   } catch (error) {
     console.error('Error submitting feedback:', error);

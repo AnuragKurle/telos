@@ -490,12 +490,20 @@ class TimelineScreen(Screen):
                 metadata=metadata
             )
             
-            # Show success message
-            self.query_one("#detail-content").update(
-                f"[bold green]✓ Feedback submitted successfully![/bold green]\n\n"
-                f"Thank you for helping improve Telos.\n\n"
-                f"Select another item to view details."
-            )
+            # Show success message with Slack status
+            if result.get('slack_notified', True):  # Default True for backward compat
+                self.query_one("#detail-content").update(
+                    f"[bold green]✓ Feedback submitted successfully![/bold green]\n\n"
+                    f"Thank you for helping improve Telos.\n\n"
+                    f"Select another item to view details."
+                )
+            else:
+                self.query_one("#detail-content").update(
+                    f"[bold yellow]⚠️ Feedback saved (Slack notification failed)[/bold yellow]\n\n"
+                    f"Your feedback is saved to Firestore.\n"
+                    f"Dev will check for failed notifications.\n\n"
+                    f"Select another item to view details."
+                )
             
         except Exception as e:
             # Show error message

@@ -177,11 +177,19 @@ Press ESC to return to dashboard
                 metadata=metadata
             )
             
-            self.app.notify(
-                "✓ Feedback submitted successfully!",
-                severity="information",
-                timeout=3
-            )
+            # Show success notification with Slack status
+            if response.get('slack_notified', True):  # Default True for backward compat
+                self.app.notify(
+                    "✓ Feedback submitted successfully!",
+                    severity="information",
+                    timeout=3
+                )
+            else:
+                self.app.notify(
+                    "⚠️ Feedback saved but Slack notification failed. Dev will check Firestore.",
+                    severity="warning",
+                    timeout=5
+                )
         except (BackendError, AuthenticationError) as e:
             self.app.notify(
                 f"Failed to submit feedback: {str(e)}",

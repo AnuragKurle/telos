@@ -30,10 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI entry point with user directory handling
 - Bundled prompts and configuration templates
 
+## [0.1.1] - 2026-01-03
+
+### Fixed
+- Import error when running `telos` command after pip install
+- API key validation now respects backend mode
+
+### Changed
+- **SaaS-first setup**: Backend mode is now the default (no API key needed)
+- Setup wizard now offers choice between SaaS mode and local mode
+- API key only required in local mode
+- Better import fallback logic for pip-installed package
+
 ## [Unreleased]
 
 ### Planned
-- Cloud backend integration
 - Cross-device sync
 - Team features
 - Advanced analytics

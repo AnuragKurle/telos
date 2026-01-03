@@ -167,6 +167,11 @@ def setup_environment():
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
     
+    # Also add the telos_tracker directory itself for imports
+    telos_tracker_dir = Path(__file__).parent.parent
+    if str(telos_tracker_dir) not in sys.path:
+        sys.path.insert(0, str(telos_tracker_dir))
+    
     # Change to user data directory for relative paths
     os.chdir(user_dir)
     
@@ -191,21 +196,49 @@ def interactive_setup():
     copy_default_config()
     copy_default_prompts()
     
-    # Prompt for API key
-    api_key = input("\nEnter your Gemini API key: ").strip()
-    
-    if not api_key:
-        print("\nNo API key entered. You can add it later to:")
-        print(f"  {config_path}")
-        return
-    
-    # Update config with API key
+    # Import yaml for config updates
     import yaml
     
     config_content = config_path.read_text()
     config = yaml.safe_load(config_content)
-    config['gemini']['api_key'] = api_key
     
+    # Ask if user wants to use backend (SaaS mode) or local mode
+    print("Choose your setup mode:\n")
+    print("1. SaaS Mode (Recommended) - Use our backend, no API key needed")
+    print("2. Local Mode - Use your own Gemini API key")
+    print()
+    
+    mode = input("Enter choice (1 or 2) [1]: ").strip() or "1"
+    
+    if mode == "1":
+        # SaaS mode - enable backend
+        print("\n[OK] Configuring SaaS mode...")
+        config['backend']['enabled'] = True
+        config['backend']['url'] = "https://telos-backend-ae7k4avtpq-el.a.run.app"
+        config['backend']['fallback_to_local'] = False
+        # Set placeholder API key (not used in backend mode)
+        config['gemini']['api_key'] = "BACKEND_MODE_NO_KEY_NEEDED"
+        
+        print("[OK] Backend configured: https://telos-backend-ae7k4avtpq-el.a.run.app")
+    else:
+        # Local mode - prompt for API key
+        print("\n[Local Mode] You'll need a Gemini API key")
+        print("Get one from: https://aistudio.google.com/app/apikey\n")
+        
+        api_key = input("Enter your Gemini API key: ").strip()
+        
+        if not api_key:
+            print("\n[Warning] No API key entered. You can add it later to:")
+            print(f"  {config_path}")
+            config['gemini']['api_key'] = "YOUR_GEMINI_API_KEY_HERE"
+        else:
+            config['gemini']['api_key'] = api_key
+            print("[OK] API key configured")
+        
+        # Disable backend for local mode
+        config['backend']['enabled'] = False
+    
+    # Save config
     with open(config_path, 'w') as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
     
@@ -269,18 +302,26 @@ def main():
     
     # Import main module and delegate
     try:
-        # Try pip-installed location first
-        from telos_tracker.main import main as app_main
-        app_main()
-    except ImportError:
+        # Try pip-installed location first (telos_tracker.main)
+        import telos_tracker.main as main_module
+        main_module.main()
+    except (ImportError, AttributeError) as e1:
         try:
-            # Fall back to development mode (running from source)
-            from main import main as app_main
-            app_main()
-        except ImportError as e:
-            print(f"Import error: {e}")
-            print("\nTry running from the client directory:")
-            print("  cd client && python main.py")
+            # Try direct import from main.py (development mode)
+            import main as main_module
+            main_module.main()
+        except (ImportError, AttributeError) as e2:
+            # Try importing from parent directory
+            try:
+                sys.path.insert(0, str(get_package_root()))
+                import main as main_module
+                main_module.main()
+            except (ImportError, AttributeError) as e3:
+                print(f"Error: Could not import main module.")
+                print(f"  Tried: telos_tracker.main, main")
+                print(f"  Errors: {e1}, {e2}, {e3}")
+                print("\nIf you installed via pip, please report this issue.")
+                print("Workaround: cd to client directory and run 'python main.py'")
 
 
 if __name__ == "__main__":
