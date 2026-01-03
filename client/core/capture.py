@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable
 import mss
+from PIL import Image
 from pynput import mouse, keyboard
 
 
@@ -112,12 +113,20 @@ class ScreenshotCapture:
             Path to the saved screenshot
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        output_path = self.temp_dir / f"screenshot_{timestamp}.png"
+        output_path = self.temp_dir / f"screenshot_{timestamp}.jpg"
 
         with mss.mss() as sct:
             monitor = sct.monitors[1]
             screenshot = sct.grab(monitor)
-            mss.tools.to_png(screenshot.rgb, screenshot.size, output=str(output_path))
+            
+            # Convert to PIL Image
+            img = Image.frombytes("RGB", screenshot.size, screenshot.bgra, "raw", "BGRX")
+            
+            # Resize if needed (max 1024x1024)
+            img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            
+            # Save as JPEG
+            img.save(str(output_path), "JPEG", quality=self.quality)
 
         return str(output_path)
 
@@ -136,7 +145,7 @@ class ScreenshotCapture:
     def cleanup_all(self) -> None:
         """Delete all screenshots in temp directory."""
         if self.temp_dir.exists():
-            for file in self.temp_dir.glob("screenshot_*.png"):
+            for file in self.temp_dir.glob("screenshot_*"):
                 try:
                     file.unlink()
                 except Exception as e:

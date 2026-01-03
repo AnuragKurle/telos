@@ -148,6 +148,81 @@ Form field: image (required)
 
 ---
 
+### 3. Submit Feedback
+
+```http
+POST /v1/feedback
+```
+
+**Purpose:** Submit user feedback on AI analysis quality
+
+**Headers:**
+```
+Authorization: Bearer <firebase-id-token>
+Content-Type: application/json
+X-Client-Version: 0.1.0
+```
+
+**Body:**
+```json
+{
+  "feedback_type": "summary",
+  "feedback_text": "Category should be Learning, not Browsing",
+  "context": {
+    "summary_id": 123,
+    "screen": "summary",
+    "app": "Chrome",
+    "task": "Reading documentation",
+    "category": "Browsing"
+  },
+  "metadata": {
+    "screen": "summary",
+    "app_version": "0.1.0"
+  }
+}
+```
+
+**Fields:**
+- `feedback_type` (required): One of `summary`, `session`, `capture`, `chat`, `general`
+- `feedback_text` (required): User's feedback text
+- `context` (optional): Contextual data about what's being corrected
+- `metadata` (optional): Client metadata (screen, app version, etc.)
+
+**Response 201 (Success):**
+```json
+{
+  "success": true,
+  "message": "Feedback submitted successfully",
+  "feedback_id": "abc123def456",
+  "slack_notified": true
+}
+```
+
+**Fields:**
+- `slack_notified`: Whether Slack notification succeeded (added in v1.1.0)
+  - `true` - Feedback sent to Slack successfully
+  - `false` - Feedback saved to Firestore but Slack failed (dev will check)
+
+**Response 400 (Bad Request):**
+```json
+{
+  "error": "Feedback text is required"
+}
+```
+
+**Response 401 (Unauthorized):**
+```json
+{
+  "error": "Invalid or expired token"
+}
+```
+
+**Client Usage:**
+- Show warning if `slack_notified` is `false`
+- Feedback is always saved to Firestore even if Slack fails
+
+---
+
 ## Response Schema
 
 ### Analysis Result Object
@@ -308,11 +383,16 @@ These endpoints are planned but not yet implemented:
 - `GET /v1/user/profile` - Get user profile
 - `POST /v1/user/link-email` - Link anonymous to email
 - `GET /v1/user/usage` - Get usage stats
-- `POST /v1/feedback` - Submit analysis feedback
 
 ---
 
 ## Changelog
+
+### v1.1.0 (2026-01-03)
+- **Added** `/v1/feedback` endpoint for submitting user feedback
+- **Fixed** Feedback now awaits Slack notification instead of fire-and-forget
+- **Added** `slack_notified` field in feedback response
+- **Added** Slack delivery status logged to Firestore for monitoring
 
 ### v1.0.0 (2025-01-02)
 - Initial API contract

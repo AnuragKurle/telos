@@ -273,12 +273,19 @@ class DashboardScreen(Screen):
                 metadata=metadata
             )
             
-            # Show success notification
-            self.app.notify(
-                "✓ Feedback submitted successfully!",
-                severity="success",
-                timeout=3
-            )
+            # Show success notification with Slack status
+            if result.get('slack_notified', True):  # Default True for backward compat
+                self.app.notify(
+                    "✓ Feedback submitted successfully!",
+                    severity="success",
+                    timeout=3
+                )
+            else:
+                self.app.notify(
+                    "⚠️ Feedback saved but Slack notification failed. Dev will check Firestore.",
+                    severity="warning",
+                    timeout=5
+                )
             
         except Exception as e:
             # Show error notification

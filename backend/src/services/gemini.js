@@ -17,6 +17,14 @@ const FALLBACK_METADATA = {
 };
 
 /**
+ * In-memory cache for API key and Prompt to avoid hitting Firestore/SecretManager on every request.
+ */
+let cachedApiKey = null;
+let cachedPromptData = null;
+let cacheExpiry = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
  * Call Gemini API to analyze a screenshot
  * 
  * @param {Buffer} imageBuffer - Screenshot image data
@@ -26,9 +34,21 @@ const FALLBACK_METADATA = {
  */
 export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png', previousCaptures = []) {
   try {
-    // Get API key and prompt
-    const apiKey = await getGeminiApiKey();
-    const promptData = await getScreenshotAnalysisPrompt();
+    // Check cache or fetch in parallel
+    const now = Date.now();
+    if (!cachedApiKey || !cachedPromptData || now > cacheExpiry) {
+      const [key, prompt] = await Promise.all([
+        getGeminiApiKey(),
+        getScreenshotAnalysisPrompt()
+      ]);
+      cachedApiKey = key;
+      cachedPromptData = prompt;
+      cacheExpiry = now + CACHE_TTL;
+      // console.log('[Gemini] Cache refreshed');
+    }
+
+    const apiKey = cachedApiKey;
+    const promptData = cachedPromptData;
 
     // Build context string from previous captures (similar to client logic)
     const contextStr = buildPreviousContext(previousCaptures);

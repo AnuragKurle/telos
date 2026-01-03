@@ -344,12 +344,20 @@ class SummaryScreen(Screen):
                 metadata=metadata
             )
             
-            # Show success message
-            self.query_one("#summary-content").update(
-                f"[bold green]✓ Feedback submitted successfully![/bold green]\n\n"
-                f"Thank you for helping improve Telos.\n\n"
-                f"Press ESC to return to summary."
-            )
+            # Show success message with Slack status
+            if result.get('slack_notified', True):  # Default True for backward compat
+                self.query_one("#summary-content").update(
+                    f"[bold green]✓ Feedback submitted successfully![/bold green]\n\n"
+                    f"Thank you for helping improve Telos.\n\n"
+                    f"Press ESC to return to summary."
+                )
+            else:
+                self.query_one("#summary-content").update(
+                    f"[bold yellow]⚠️ Feedback saved (Slack notification failed)[/bold yellow]\n\n"
+                    f"Your feedback is saved to Firestore.\n"
+                    f"Dev will check for failed notifications.\n\n"
+                    f"Press ESC to return to summary."
+                )
             
         except Exception as e:
             # Show error message
