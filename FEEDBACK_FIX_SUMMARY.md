@@ -75,52 +75,41 @@ Updated `shared/api-contract.md`:
 
 ### Documentation
 - ✅ `shared/api-contract.md` - Added feedback endpoint spec
+- ✅ `backend/SLACK_SETUP.md` - How to configure Slack secrets
+- ✅ `backend/setup-slack-secrets.js` - Interactive setup wizard
+- ✅ `backend/README.md` - Updated with Slack setup instructions
 - ✅ `docs/MONITORING_FEEDBACK.md` - New guide for monitoring failures
 - ✅ `backend/TEST_FEEDBACK_FLOW.md` - End-to-end testing guide
 - ✅ `FEEDBACK_FIX_SUMMARY.md` - This file
 
 ## Deployment Checklist
 
-### 1. Verify Slack Secrets
+### 1. Setup Slack Integration (REQUIRED)
 
-Before deploying, ensure Slack integration is configured:
+Slack webhooks are stored in **GCP Secret Manager**, not in the GitHub repo. Use the setup script:
 
 ```bash
 cd backend
 
-# Check secrets
-node -e "
-import { getSlackWebhook, getSlackBotToken } from './src/services/secrets.js';
+# Run interactive setup wizard
+npm run setup:slack
 
-(async () => {
-  const webhook = await getSlackWebhook();
-  const token = await getSlackBotToken();
-  console.log('Webhook:', webhook ? '✓ OK' : '✗ MISSING');
-  console.log('Bot Token:', token ? '✓ OK' : '✗ MISSING');
-})();
-"
+# Or check current status
+npm run check:slack
 ```
 
-**Required:** At least one of these must be configured in GCP Secret Manager:
-- `SLACK_WEBHOOK` secret
-- `SLACK_BOT_TOKEN` secret
+The wizard will:
+- ✅ Create `SLACK_WEBHOOK` secret in GCP Secret Manager
+- ✅ Show you commands to grant Cloud Run access
+- ✅ Keep secrets out of your Git repo
 
-**If missing:** Add secret to Secret Manager:
+**Quick Setup:**
+1. Get webhook URL from https://api.slack.com/apps (Incoming Webhooks)
+2. Run `npm run setup:slack` and paste the URL
+3. Run the `gcloud secrets add-iam-policy-binding` command shown
+4. Test with `npm run test:slack`
 
-```bash
-# Option 1: Webhook URL (recommended)
-echo -n "https://hooks.slack.com/services/YOUR/WEBHOOK/URL" | \
-  gcloud secrets create SLACK_WEBHOOK --data-file=-
-
-# Option 2: Bot Token
-echo -n "xoxb-YOUR-BOT-TOKEN" | \
-  gcloud secrets create SLACK_BOT_TOKEN --data-file=-
-
-# Grant Cloud Run access
-gcloud secrets add-iam-policy-binding SLACK_WEBHOOK \
-  --member="serviceAccount:YOUR-SERVICE-ACCOUNT@PROJECT.iam.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
-```
+**See:** `backend/SLACK_SETUP.md` for detailed instructions
 
 ### 2. Deploy Backend
 
