@@ -1,5 +1,6 @@
 """Day activity heatmap showing full 24-hour breakdown."""
 
+import asyncio
 from textual.reactive import reactive
 from textual.widget import Widget
 from rich.text import Text
@@ -42,20 +43,21 @@ class DayHeatmap(Widget):
         # Refresh every 30 seconds (more frequent for today's data)
         self.set_interval(30.0, self.refresh_data)
         
-        # Initial load
-        self.refresh_data()
+        # Initial load in a background task
+        self.run_worker(self.refresh_data())
 
-    def refresh_data(self):
+    async def refresh_data(self):
         """Load day blocks from database."""
         try:
             date = datetime.combine(self.selected_date, datetime.min.time())
-            self.blocks = self.db.get_day_blocks(date, block_minutes=30)
+            # Run in thread to avoid blocking UI
+            self.blocks = await asyncio.to_thread(self.db.get_day_blocks, date, block_minutes=30)
         except Exception as e:
             self.blocks = []
     
     def watch_selected_date(self, old_date, new_date):
         """Refresh when date changes."""
-        self.refresh_data()
+        self.run_worker(self.refresh_data())
         
     def watch_blocks(self, old_blocks, new_blocks):
         """Refresh display when data changes."""
