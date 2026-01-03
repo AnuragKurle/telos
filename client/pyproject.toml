@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "telos-tracker"
-version = "0.1.5"
+version = "0.1.6"
 description = "AI-powered screen time tracker with intelligent activity analysis. Install: pip install telos-tracker && telos setup"
 readme = "README.md"
 license = "MIT"
