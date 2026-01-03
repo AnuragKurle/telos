@@ -103,8 +103,10 @@ class ScreenshotCapture:
             quality: JPEG quality (1-100)
         """
         self.quality = quality
-        self.temp_dir = Path("temp_screenshots")
-        self.temp_dir.mkdir(exist_ok=True)
+        # Use absolute path in user data directory
+        user_data_dir = Path.home() / ".telos"
+        self.temp_dir = user_data_dir / "temp_screenshots"
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     def capture(self) -> str:
         """Capture screenshot and save to temp file.

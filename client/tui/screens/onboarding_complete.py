@@ -84,5 +84,10 @@ class OnboardingCompleteScreen(Screen):
             self.set_timer(1, self.update_countdown)
         else:
             countdown_widget.update("Let's go!")
-            self.set_timer(0.5, lambda: self.dismiss(True))
+            # Don't call dismiss from timer callback - use action instead
+            self.set_timer(0.5, self.action_finish)
+    
+    def action_finish(self) -> None:
+        """Finish onboarding and dismiss screen."""
+        self.dismiss(True)
 

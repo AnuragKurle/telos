@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-01-03
+
+### Fixed
+- **CRITICAL**: Screenshot capture path now uses absolute path in `~/.telos/temp_screenshots` instead of relative path
+- **CRITICAL**: Default config now enables backend (SaaS mode) by default, preventing authentication errors for new users
+- **CRITICAL**: Fixed ScreenError in onboarding completion screen - now dismisses properly without crashing
+- OnboardingCompleteScreen no longer calls `dismiss()` from timer callback (Textual async violation)
+
+### Changed
+- Default configuration now has backend enabled with production URL
+- Backend mode is now the default for all new installations (SaaS-first)
+- Gemini API key placeholder updated to "BACKEND_MODE_NO_KEY_NEEDED" to clarify backend usage
+
+### Technical
+- Screenshot temporary directory now created in user data directory with `parents=True`
+- Onboarding flow completion uses action method instead of lambda for proper async handling
+- Fresh installs now work out-of-the-box without requiring `telos setup`
+
 ## [0.1.3] - 2026-01-03
 
 ### Added
