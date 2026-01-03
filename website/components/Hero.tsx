@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronRight, Loader2, Check } from "lucide-react";
+import { ChevronRight, Loader2, Check, Monitor, Apple } from "lucide-react";
 import { TypewriterEffect } from "./TypewriterEffect";
 import { TerminalFrame } from "./TerminalFrame";
 import { db } from "@/lib/firebase";
@@ -47,70 +47,74 @@ export function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-terminal-green/10 border border-terminal-green/20 text-terminal-green text-xs font-medium mb-6"
+          className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-neutral-900/80 border border-neutral-800 text-neutral-400 text-xs font-medium mb-6"
         >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-terminal-green opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-terminal-green"></span>
+          <span className="flex items-center gap-1.5">
+            <Monitor className="w-3.5 h-3.5" />
+            Windows
           </span>
-          Phase 1: The Observer Available Now
+          <span className="text-neutral-700">•</span>
+          <span className="flex items-center gap-1.5">
+            <Apple className="w-3.5 h-3.5" />
+            macOS
+          </span>
         </motion.div>
 
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-          Protect Your <span className="text-terminal-green">Intentions</span>
+          Know Exactly Where Your <span className="text-terminal-green">Time Goes</span>
           <br />
           <span className="text-neutral-500 font-mono text-2xl md:text-4xl mt-2 block">
-            <TypewriterEffect text={["Fight the algorithm.", "Defend your focus.", "Align your time.", "Zero overhead."]} />
+            <TypewriterEffect text={["What did I do today?", "How long was that meeting?", "When did I finish that task?", "Where did my morning go?"]} />
           </span>
         </h1>
 
         <p className="text-neutral-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-          The terminal-based productivity assistant that aligns your screen time with your goals.
+          Automatic time tracking that shows you what you <em>actually</em> did.
           <br className="hidden md:block" />
-          A lightweight guardian against algorithmic distraction.
+          Data stays on your device. Ask questions in plain English. Zero effort required.
         </p>
 
         {/* Email CTA */}
         <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center items-center max-w-md mx-auto w-full">
           <div className="relative w-full">
-             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500 font-mono text-sm">
-                $
-             </div>
-             <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="enter_email_for_access" 
-                required
-                disabled={status === "loading" || status === "success"}
-                className="w-full pl-8 pr-4 py-3 bg-neutral-900 border border-neutral-800 rounded-md focus:outline-none focus:border-terminal-green focus:ring-1 focus:ring-terminal-green text-white font-mono placeholder:text-neutral-600 transition-all disabled:opacity-50"
-             />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500 font-mono text-sm">
+              $
+            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              required
+              disabled={status === "loading" || status === "success"}
+              className="w-full pl-8 pr-4 py-3 bg-neutral-900 border border-neutral-800 rounded-md focus:outline-none focus:border-terminal-green focus:ring-1 focus:ring-terminal-green text-white font-mono placeholder:text-neutral-600 transition-all disabled:opacity-50"
+            />
           </div>
-          <button 
+          <button
             type="submit"
             disabled={status === "loading" || status === "success"}
-            className="w-full sm:w-auto px-6 py-3 bg-terminal-green text-black font-semibold rounded-md hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-w-[140px]"
+            className="w-full sm:w-auto px-6 py-3 bg-terminal-green text-black font-semibold rounded-md hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed min-w-[160px]"
           >
             {status === "loading" ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : status === "success" ? (
               <>
-                Joined <Check className="w-4 h-4" />
+                You're In! <Check className="w-4 h-4" />
               </>
             ) : (
               <>
-                Join Waitlist <ChevronRight className="w-4 h-4" />
+                Get Early Access <ChevronRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
         {status === "error" && (
-            <div className="text-xs text-red-500 mt-4 font-mono bg-red-950/30 px-3 py-2 rounded border border-red-900/50">
-              Error: {errorMsg || "Connection failed. Check your network."}
-            </div>
+          <div className="text-xs text-red-500 mt-4 font-mono bg-red-950/30 px-3 py-2 rounded border border-red-900/50">
+            Error: {errorMsg || "Connection failed. Check your network."}
+          </div>
         )}
         <p className="text-xs text-neutral-600 mt-4">
-          Privacy-first architecture. Your data stays on your device.
+          Free during beta • No credit card required • Installs in 30 seconds
         </p>
       </div>
 
@@ -121,33 +125,23 @@ export function Hero() {
         transition={{ duration: 0.8, delay: 0.2 }}
         className="w-full max-w-5xl z-10"
       >
-        <TerminalFrame title="telos — guardian_mode">
+        <TerminalFrame title="telos — dashboard">
           <div className="font-mono text-sm md:text-base space-y-4">
             <div className="flex gap-2">
               <span className="text-terminal-green">➜</span>
               <span className="text-blue-400">~</span>
-              <span className="text-white">telos intent set "Deep work on backend architecture"</span>
+              <span className="text-white">telos chat "What did I work on this morning?"</span>
             </div>
-            
-            <div className="pl-4 border-l-2 border-neutral-800 space-y-4">
-              <div className="text-neutral-400">Intention locked. Monitoring distraction vectors...</div>
-              
-              <div className="opacity-50 text-xs text-neutral-600 italic">
-                [+20 mins passed]
-              </div>
 
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <span className="text-terminal-amber font-bold">Guardian:</span>
-                  <div className="text-neutral-300">
-                    <p className="mb-2 text-terminal-amber">⚠️ Alignment Alert</p>
-                    <p>You intended to work on <span className="text-white font-semibold">backend architecture</span>.</p>
-                    <p className="text-neutral-400 mt-1">
-                      Current activity: <span className="text-red-400">Twitter/X (15m)</span>, <span className="text-red-400">Hacker News (5m)</span>.
-                    </p>
-                    <p className="mt-2 font-bold text-white">Resuming focus protocol? [Y/n]</p>
-                  </div>
+            <div className="pl-4 border-l-2 border-neutral-800 space-y-3">
+              <div className="text-neutral-300">
+                <p className="text-terminal-green mb-2">📊 This morning (9am - 12pm):</p>
+                <div className="space-y-1 text-sm">
+                  <p><span className="text-blue-400">2h 15m</span> — VS Code: Working on API refactor</p>
+                  <p><span className="text-terminal-amber">35m</span> — Browser: Stack Overflow, GitHub docs</p>
+                  <p><span className="text-red-400">10m</span> — Slack: Team messages</p>
                 </div>
+                <p className="mt-3 text-neutral-400 text-sm">You completed the auth middleware and started on rate limiting.</p>
               </div>
             </div>
 
