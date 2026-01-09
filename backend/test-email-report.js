@@ -14,102 +14,99 @@ dotenv.config();
 const projectId = process.env.FIREBASE_PROJECT_ID;
 
 if (!projectId) {
-    console.error('❌ FIREBASE_PROJECT_ID environment variable is required');
-    process.exit(1);
+  console.error('❌ FIREBASE_PROJECT_ID environment variable is required');
+  process.exit(1);
 }
 
 if (!admin.apps.length) {
-    admin.initializeApp({
-        projectId: projectId
-    });
-    console.log(`✓ Firebase initialized for project: ${projectId}`);
+  admin.initializeApp({
+    projectId: projectId
+  });
+  console.log(`✓ Firebase initialized for project: ${projectId}`);
 }
 
 async function testEmailReport() {
-    const db = admin.firestore();
-    const userEmail = 'anurag@userology.co';
+  const db = admin.firestore();
+  const userEmail = 'anurag@userology.co';
 
-    console.log('\n=== Testing Email Report ===\n');
+  console.log('\n=== Testing Email Report ===\n');
 
-    // 1. Check user document
-    console.log('1. Checking user document...');
-    const userDoc = await db.collection('users').doc(userEmail).get();
+  // 1. Check user document
+  console.log('1. Checking user document...');
+  const userDoc = await db.collection('users').doc(userEmail).get();
 
-    if (!userDoc.exists) {
-        console.error('❌ User document not found!');
-        process.exit(1);
-    }
+  if (!userDoc.exists) {
+    console.error('❌ User document not found!');
+    process.exit(1);
+  }
 
-    const userData = userDoc.data();
-    console.log('✓ User found:', {
-        email: userData.email,
-        status: userData.status,
-        plan: userData.plan,
-        emailReports: userData.emailReports
-    });
+  const userData = userDoc.data();
+  console.log('✓ User found:', {
+    email: userData.email,
+    status: userData.status,
+    plan: userData.plan,
+    emailReports: userData.emailReports
+  });
 
-    // 2. Check if email reports are enabled
-    if (!userData.emailReports?.enabled) {
-        console.error('❌ Email reports not enabled for this user');
-        process.exit(1);
-    }
-    console.log('✓ Email reports enabled');
+  // 2. Check if email reports are enabled
+  if (!userData.emailReports?.enabled) {
+    console.error('❌ Email reports not enabled for this user');
+    process.exit(1);
+  }
+  console.log('✓ Email reports enabled');
 
-    // 3. Create test summary data
-    console.log('\n2. Creating test summary data...');
-    const testSummary = {
-        date: new Date().toISOString().split('T')[0],
-        work_seconds: 4 * 3600,        // 4 hours
-        learning_seconds: 1.5 * 3600,  // 1.5 hours
-        browsing_seconds: 0.5 * 3600,  // 30 mins
-        entertainment_seconds: 0.25 * 3600, // 15 mins
-        productivity_score: 78,
-        daily_narrative: "Today was a productive day! You spent most of your time on focused work, with some time dedicated to learning new skills. Your entertainment consumption was minimal, showing excellent self-discipline.",
-        key_learnings_json: JSON.stringify([
-            "Learned about Firebase Admin SDK integration",
-            "Explored SendGrid email templates",
-            "Studied timezone handling in JavaScript"
-        ]),
-        context_switches: 12
-    };
-    console.log('✓ Test summary created');
+  // 3. Create test summary data
+  console.log('\n2. Creating test summary data...');
+  const testSummary = {
+    date: new Date().toISOString().split('T')[0],
+    work_seconds: 4 * 3600,        // 4 hours
+    learning_seconds: 1.5 * 3600,  // 1.5 hours
+    browsing_seconds: 0.5 * 3600,  // 30 mins
+    entertainment_seconds: 0.25 * 3600, // 15 mins
+    productivity_score: 78,
+    daily_narrative: "Today was a productive day! You spent most of your time on focused work, with some time dedicated to learning new skills. Your entertainment consumption was minimal, showing excellent self-discipline.",
+    key_learnings_json: JSON.stringify([
+      "Learned about Firebase Admin SDK integration",
+      "Explored SendGrid email templates",
+      "Studied timezone handling in JavaScript"
+    ]),
+    context_switches: 12
+  };
+  console.log('✓ Test summary created');
 
-    // 4. Initialize SendGrid
-    console.log('\n3. Initializing SendGrid...');
-    try {
-        const apiKey = await getSecret(process.env.SENDGRID_API_KEY_SECRET_NAME || 'SENDGRID_API_KEY');
-        sgMail.setApiKey(apiKey);
-        console.log('✓ SendGrid initialized');
-    } catch (error) {
-        console.error('❌ Failed to initialize SendGrid:', error.message);
-        console.log('\nTrying direct API key approach...');
-        // Fallback: try hardcoded key if secret fails (for local testing only)
-        sgMail.setApiKey('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');
-        console.log('✓ SendGrid initialized with direct key');
-    }
+  // 4. Initialize SendGrid
+  console.log('\n3. Initializing SendGrid...');
+  try {
+    const apiKey = await getSecret(process.env.SENDGRID_API_KEY_SECRET_NAME || 'SENDGRID_API_KEY');
+    sgMail.setApiKey(apiKey);
+    console.log('✓ SendGrid initialized');
+  } catch (error) {
+    console.error('❌ Failed to initialize SendGrid:', error.message);
+    process.exit(1);
+  }
 
-    // 5. Generate email content
-    const date = new Date(testSummary.date).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
+  // 5. Generate email content
+  const date = new Date(testSummary.date).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
-    const workMin = Math.floor(testSummary.work_seconds / 60);
-    const learningMin = Math.floor(testSummary.learning_seconds / 60);
-    const browsingMin = Math.floor(testSummary.browsing_seconds / 60);
-    const entertainmentMin = Math.floor(testSummary.entertainment_seconds / 60);
-    const totalMin = workMin + learningMin + browsingMin + entertainmentMin;
+  const workMin = Math.floor(testSummary.work_seconds / 60);
+  const learningMin = Math.floor(testSummary.learning_seconds / 60);
+  const browsingMin = Math.floor(testSummary.browsing_seconds / 60);
+  const entertainmentMin = Math.floor(testSummary.entertainment_seconds / 60);
+  const totalMin = workMin + learningMin + browsingMin + entertainmentMin;
 
-    const score = Math.round(testSummary.productivity_score || 0);
-    let scoreColor = '#e74c3c';
-    let scoreEmoji = '📊';
-    if (score >= 75) { scoreColor = '#27ae60'; scoreEmoji = '🌟'; }
-    else if (score >= 50) { scoreColor = '#f39c12'; scoreEmoji = '⭐'; }
+  const score = Math.round(testSummary.productivity_score || 0);
+  let scoreColor = '#e74c3c';
+  let scoreEmoji = '📊';
+  if (score >= 75) { scoreColor = '#27ae60'; scoreEmoji = '🌟'; }
+  else if (score >= 50) { scoreColor = '#f39c12'; scoreEmoji = '⭐'; }
 
-    let keyLearnings = JSON.parse(testSummary.key_learnings_json || '[]');
-    const learningsHTML = keyLearnings.length > 0 ? `
+  let keyLearnings = JSON.parse(testSummary.key_learnings_json || '[]');
+  const learningsHTML = keyLearnings.length > 0 ? `
     <div style="margin: 25px 0;">
       <h2 style="color: #2c3e50; margin-bottom: 15px;">🎓 Key Learnings</h2>
       <ul style="color: #34495e; line-height: 1.6;">
@@ -118,14 +115,14 @@ async function testEmailReport() {
     </div>
   ` : '';
 
-    const progressBars = [
-        { label: 'Work', minutes: workMin, color: '#3498db' },
-        { label: 'Learning', minutes: learningMin, color: '#9b59b6' },
-        { label: 'Browsing', minutes: browsingMin, color: '#95a5a6' },
-        { label: 'Entertainment', minutes: entertainmentMin, color: '#e67e22' }
-    ].map(({ label, minutes, color }) => {
-        const percentage = totalMin > 0 ? Math.round((minutes / totalMin) * 100) : 0;
-        return `
+  const progressBars = [
+    { label: 'Work', minutes: workMin, color: '#3498db' },
+    { label: 'Learning', minutes: learningMin, color: '#9b59b6' },
+    { label: 'Browsing', minutes: browsingMin, color: '#95a5a6' },
+    { label: 'Entertainment', minutes: entertainmentMin, color: '#e67e22' }
+  ].map(({ label, minutes, color }) => {
+    const percentage = totalMin > 0 ? Math.round((minutes / totalMin) * 100) : 0;
+    return `
       <div style="margin: 15px 0;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
           <span style="color: #2c3e50; font-weight: 500;">${label}</span>
@@ -136,9 +133,9 @@ async function testEmailReport() {
         </div>
       </div>
     `;
-    }).join('');
+  }).join('');
 
-    const html = `
+  const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -213,31 +210,31 @@ async function testEmailReport() {
 </html>
   `;
 
-    // 6. Send test email
-    console.log('\n4. Sending test email...');
-    const msg = {
-        to: userEmail,
-        from: {
-            email: process.env.SENDGRID_FROM_EMAIL || 'anuragkurle27@gmail.com',
-            name: process.env.SENDGRID_FROM_NAME || 'Telos'
-        },
-        subject: `📊 Daily Activity Report - ${date} (TEST)`,
-        text: `Test report for ${date}. Productivity Score: ${score}/100`,
-        html: html
-    };
+  // 6. Send test email
+  console.log('\n4. Sending test email...');
+  const msg = {
+    to: userEmail,
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL || 'anuragkurle27@gmail.com',
+      name: process.env.SENDGRID_FROM_NAME || 'Telos'
+    },
+    subject: `📊 Daily Activity Report - ${date} (TEST)`,
+    text: `Test report for ${date}. Productivity Score: ${score}/100`,
+    html: html
+  };
 
-    try {
-        await sgMail.send(msg);
-        console.log('\n✅ SUCCESS! Email sent to', userEmail);
-        console.log('\nCheck your inbox for the daily report!');
-    } catch (error) {
-        console.error('\n❌ FAILED:', error.message);
-        if (error.response) {
-            console.error('Details:', error.response.body);
-        }
+  try {
+    await sgMail.send(msg);
+    console.log('\n✅ SUCCESS! Email sent to', userEmail);
+    console.log('\nCheck your inbox for the daily report!');
+  } catch (error) {
+    console.error('\n❌ FAILED:', error.message);
+    if (error.response) {
+      console.error('Details:', error.response.body);
     }
+  }
 
-    process.exit(0);
+  process.exit(0);
 }
 
 testEmailReport().catch(console.error);

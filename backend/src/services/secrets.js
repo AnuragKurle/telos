@@ -23,6 +23,12 @@ const client = new SecretManagerServiceClient();
 export async function getSecret(secretName, version = 'latest') {
   const cacheKey = `${secretName}:${version}`;
 
+  // 1. Try environment variable first (priority for local dev)
+  if (process.env[secretName]) {
+    console.log(`[SECRETS] Using environment variable for ${secretName}`);
+    return process.env[secretName];
+  }
+
   // Return cached value if available
   if (secretCache.has(cacheKey)) {
     return secretCache.get(cacheKey);

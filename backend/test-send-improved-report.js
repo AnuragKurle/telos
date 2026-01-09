@@ -3,11 +3,18 @@ import sgMail from '@sendgrid/mail';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const apiKey = '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';
+const apiKey = process.env.SENDGRID_API_KEY;
+if (!apiKey) {
+    console.error('❌ Error: SENDGRID_API_KEY not found in environment variables.');
+    process.exit(1);
+}
 sgMail.setApiKey(apiKey);
 
 // Read the improved report HTML
