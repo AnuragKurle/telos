@@ -51,8 +51,9 @@ router.post(
         }
       }
 
-      // Analyze screenshot
-      const analysis = await analyzeScreenshot(req.file.buffer, req.file.mimetype, previousCaptures);
+      // Analyze screenshot (pass user email for Portkey logging)
+      const userEmail = req.user.email || req.user.uid;
+      const analysis = await analyzeScreenshot(req.file.buffer, req.file.mimetype, previousCaptures, userEmail);
 
       // Return analysis result
       res.status(200).json(analysis);

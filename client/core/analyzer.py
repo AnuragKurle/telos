@@ -1,12 +1,71 @@
-"""Gemini Vision API integration for screenshot analysis."""
+"""Gemini Vision API integration for screenshot analysis.
+
+PORTKEY INTEGRATION: All LLM calls are logged to Portkey for observability.
+See https://app.portkey.ai for logs.
+"""
 
 import json
 import time
 import base64
+import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
 from utils.prompt_loader import PromptLoader
+
+# Portkey configuration for LLM logging
+PORTKEY_API_KEY = os.getenv('PORTKEY_API_KEY', 'AapMbWHuS0fvPfOSF9z4iOBuEYTm')
+PORTKEY_VIRTUAL_KEY = os.getenv('PORTKEY_VIRTUAL_KEY', 'google-virtual-881dd3')
+
+
+def _log_to_portkey(prompt: str, response_text: str, model: str, call_type: str = "unknown", latency_ms: float = 0, user_id: str = None):
+    """Log LLM call to Portkey for observability.
+    
+    Uses Portkey's SDK to make a small "ping" call that logs the metadata.
+    This is a fire-and-forget operation.
+    """
+    try:
+        from portkey_ai import Portkey
+        import threading
+        
+        def _send_log():
+            try:
+                # Create Portkey client with metadata
+                portkey = Portkey(
+                    api_key=PORTKEY_API_KEY,
+                    virtual_key=PORTKEY_VIRTUAL_KEY,
+                    metadata={
+                        "_user": user_id or "telos-client",
+                        "call_type": call_type,
+                        "source": "telos-client",
+                        "model": model,
+                        "latency_ms": str(latency_ms),
+                    },
+                    trace_id=f"client-{call_type}-{int(latency_ms)}",
+                )
+                
+                # Use a minimal call to log our data through Portkey
+                # This creates a log entry with our metadata
+                portkey.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": f"[TELOS LOG] call_type={call_type}"},
+                        {"role": "user", "content": prompt[:2000] if prompt else "N/A"},
+                        {"role": "assistant", "content": response_text[:2000] if response_text else "N/A"}
+                    ],
+                    max_tokens=1,  # Minimal tokens to avoid cost
+                    stream=False,
+                )
+            except Exception as e:
+                print(f"[Portkey] Background log failed: {e}")
+        
+        # Run in background thread to not block
+        thread = threading.Thread(target=_send_log, daemon=True)
+        thread.start()
+        
+    except Exception as e:
+        # Silent fail - don't interrupt the flow for logging failures
+        print(f"[Portkey] Logging setup failed (non-critical): {e}")
 
 
 class RateLimitError(Exception):
@@ -17,30 +76,38 @@ class RateLimitError(Exception):
 
 
 class GeminiAnalyzer:
-    """Analyzes screenshots using Gemini Vision API with the new google-genai SDK."""
+    """Analyzes screenshots using Gemini Vision API with the new google-genai SDK.
+    
+    All LLM calls are logged to Portkey for observability.
+    """
 
     # Common categories (AI can suggest others)
     COMMON_CATEGORIES = ['work', 'learning', 'browsing', 'entertainment', 'idle',
                          'debugging', 'meeting', 'research', 'communication', 'creative', 'planning', 'break']
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", user_email: str = None):
         """Initialize Gemini analyzer.
 
         Args:
             api_key: Google Gemini API key
             model: Model name to use
+            user_email: User email for logging
         """
         from google import genai
         from google.genai import types
         
         self.client = genai.Client(api_key=api_key)
         self.model_name = model
+        self.user_email = user_email
         self.types = types
         self.max_retries = 3
         self.retry_delay = 2
         self.last_request_time = 0
         self.min_request_interval = 4.0  # Minimum 4 seconds between requests (15 RPM = 4s)
         self.prompt_loader = PromptLoader()
+        
+        # Log initialization
+        print(f"[GeminiAnalyzer] Initialized with Portkey logging enabled (User: {user_email})")
 
     def _apply_rate_limit(self) -> None:
         """Apply rate limiting before making API requests."""
@@ -204,13 +271,16 @@ class GeminiAnalyzer:
     def analyze_screenshot_with_context(
         self,
         image_path: str,
-        previous_captures: Optional[List[Dict]] = None
+        previous_captures: Optional[List[Dict]] = None,
+        context_metadata: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """Analyze screenshot with context from previous captures.
 
         Args:
             image_path: Path to screenshot image
             previous_captures: List of previous captures for context
+            context_metadata: System-level metadata (active window, activity metrics)
+
 
         Returns:
             Dictionary with category, app, task, confidence, and detailed_context
@@ -218,11 +288,38 @@ class GeminiAnalyzer:
         """
         # Build context from previous captures
         context_str = self._build_previous_context(previous_captures or [])
+        
+        # Build system context string
+        system_context_str = "No system context available."
+        if context_metadata:
+            metrics = []
+            if context_metadata.get('keystrokes', 0) > 10:
+                metrics.append("High Typing")
+            elif context_metadata.get('keystrokes', 0) > 0:
+                metrics.append("Low Typing")
+                
+            if context_metadata.get('mouse_clicks', 0) > 2:
+                metrics.append("High Clicks")
+            
+            if context_metadata.get('mouse_distance', 0) > 500:
+                metrics.append("High Mouse Movement")
+                
+            input_desc = ", ".join(metrics) if metrics else "No Input"
+            
+            system_context_str = (
+                f"Active Window: {context_metadata.get('window_title', 'Unknown')}\n"
+                f"App Name: {context_metadata.get('app_name', 'Unknown')}\n"
+                f"Input Activity (Last 30s): {input_desc}\n"
+                f"(Raw: {context_metadata.get('keystrokes')} keys, {context_metadata.get('mouse_clicks')} clicks)"
+            )
 
         # Load prompt and inject context
         prompt = self.prompt_loader.load_prompt(
             'screenshot_analysis',
-            variables={'previous_context': context_str}
+            variables={
+                'previous_context': context_str,
+                'system_context': system_context_str
+            }
         )
 
         generation_config = self._get_generation_config()
@@ -247,11 +344,13 @@ class GeminiAnalyzer:
                 ]
 
                 # Call API with new SDK
+                start_time = time.time()
                 response = self.client.models.generate_content(
                     model=self.model_name,
                     contents=contents,
                     config=generation_config
                 )
+                latency_ms = (time.time() - start_time) * 1000
 
                 # Check if response has text
                 if not response.text:
@@ -262,6 +361,16 @@ class GeminiAnalyzer:
                     return None
 
                 result_text = response.text.strip()
+
+                # Log to Portkey for observability (all inputs/outputs)
+                _log_to_portkey(
+                    prompt=prompt,
+                    response_text=result_text,
+                    model=self.model_name,
+                    call_type="screenshot_analysis",
+                    latency_ms=latency_ms,
+                    user_id=self.user_email
+                )
 
                 # Extract JSON from response
                 result_text = self._extract_json(result_text)
@@ -437,18 +546,20 @@ class GeminiAnalyzer:
     def analyze_with_fallback(
         self,
         image_path: str,
-        previous_captures: Optional[List[Dict]] = None
+        previous_captures: Optional[List[Dict]] = None,
+        context_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Analyze screenshot with fallback to default values.
 
         Args:
             image_path: Path to screenshot image
             previous_captures: Previous captures for context (optional)
+            context_metadata: System-level metadata (active window, activity metrics)
 
         Returns:
             Analysis result or default fallback
         """
-        result = self.analyze_screenshot_with_context(image_path, previous_captures)
+        result = self.analyze_screenshot_with_context(image_path, previous_captures, context_metadata)
 
         if result is None:
             return {

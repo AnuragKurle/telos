@@ -144,7 +144,8 @@ class TelosApp(App):
             db = Database(self.config.get('storage', 'database_path'))
             analyzer = GeminiAnalyzer(
                 self.config.get('gemini', 'api_key'),
-                self.config.get('gemini', 'model')
+                self.config.get('gemini', 'model'),
+                user_email=self.config.get('account', 'email', default=None)
             )
             goal_manager = AnalysisGoalManager(db)
             daily_aggregator = DailyAggregator(db, analyzer, goal_manager)

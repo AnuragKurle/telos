@@ -72,7 +72,8 @@ def test_capture_loop():
 
     api_key = config.get('gemini', 'api_key')
     model = config.get('gemini', 'model')
-    analyzer = GeminiAnalyzer(api_key, model)
+    user_email = config.get('account', 'email', default=None)
+    analyzer = GeminiAnalyzer(api_key, model, user_email=user_email)
 
     quality = config.get('capture', 'screenshot_quality', default=85)
     capturer = ScreenshotCapture(quality)
@@ -584,7 +585,7 @@ def run_onboarding(config, onboarding_mgr):
     from textual.app import App
     from tui.screens import (
         WelcomeScreen, PrivacyNoticeScreen, GoalSetupScreen, 
-        EmailSetupScreen, OnboardingCompleteScreen
+        EmailSetupScreen, OnboardingCompleteScreen, ActivationScreen
     )
     from core.trial_manager import TrialManager
     from core.backend_client import BackendClient
@@ -600,6 +601,11 @@ def run_onboarding(config, onboarding_mgr):
             self.config = config
             self.onboarding_mgr = onboarding_mgr
             self.trial_manager = TrialManager(config, trial_duration_days=7)
+            
+            # Setup Backend Client
+            backend_url = config.get('backend', 'url', default="")
+            firebase_api_key = config.config.get('firebase', {}).get('api_key', "")
+            self.backend_client = BackendClient(backend_url, firebase_api_key)
         
         def on_mount(self) -> None:
             """Start onboarding flow in a worker."""
@@ -619,8 +625,9 @@ def run_onboarding(config, onboarding_mgr):
                 self.exit()
                 return
             
-            # Start trial
-            self.trial_manager.start_trial()
+            # Activation Screen (New)
+            # We enforce activation here.
+            await self.push_screen_wait(ActivationScreen(self.backend_client, self.trial_manager))
             
             # Backend connection test (if enabled)
             backend_enabled = self.config.get('backend', 'enabled', default=False)

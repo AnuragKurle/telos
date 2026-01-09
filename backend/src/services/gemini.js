@@ -3,10 +3,39 @@
  * 
  * Calls Google Gemini API for screenshot analysis.
  * Uses server-side API key to keep prompts private.
+ * 
+ * PORTKEY INTEGRATION: All calls are routed through Portkey for observability.
+ * See https://app.portkey.ai for logs.
  */
 
+import { Portkey } from 'portkey-ai';
 import { getGeminiApiKey } from './secrets.js';
 import { getScreenshotAnalysisPrompt } from './prompts.js';
+
+/**
+ * Portkey Configuration
+ * Reads from environment variables for security.
+ */
+const PORTKEY_API_KEY = process.env.PORTKEY_API_KEY || 'AapMbWHuS0fvPfOSF9z4iOBuEYTm';
+const PORTKEY_VIRTUAL_KEY = process.env.PORTKEY_VIRTUAL_KEY || 'google-virtual-881dd3';
+
+/**
+ * Initialize Portkey client (singleton)
+ */
+let portkeyClient = null;
+function getPortkeyClient(traceId = null, userId = null) {
+  // Create fresh client with metadata for each call
+  return new Portkey({
+    apiKey: PORTKEY_API_KEY,
+    virtualKey: PORTKEY_VIRTUAL_KEY,
+    metadata: {
+      _user: userId || 'backend-service',
+      call_type: 'screenshot_analysis',
+      source: 'telos-backend',
+    },
+    traceId: traceId || `backend-${Date.now()}`,
+  });
+}
 
 /**
  * Fallback metadata (used only if AI doesn't provide emoji/color)
@@ -30,9 +59,10 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * @param {Buffer} imageBuffer - Screenshot image data
  * @param {string} mimeType - Image MIME type (e.g., "image/png")
  * @param {Array} previousCaptures - Previous captures for context
+ * @param {string} userId - Optional user ID for logging
  * @returns {Promise<object>} Analysis result matching API contract schema
  */
-export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png', previousCaptures = []) {
+export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png', previousCaptures = [], userId = null) {
   try {
     // Check cache or fetch in parallel
     const now = Date.now();
@@ -44,110 +74,43 @@ export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png', pre
       cachedApiKey = key;
       cachedPromptData = prompt;
       cacheExpiry = now + CACHE_TTL;
-      // console.log('[Gemini] Cache refreshed');
     }
 
-    const apiKey = cachedApiKey;
     const promptData = cachedPromptData;
 
     // Build context string from previous captures (similar to client logic)
     const contextStr = buildPreviousContext(previousCaptures);
     const finalPrompt = promptData.content.replace('{previous_context}', contextStr);
 
-    // Convert image to base64
+    // Convert image to base64 for multimodal input
     const base64Image = imageBuffer.toString('base64');
+    const imageUrl = `data:${mimeType};base64,${base64Image}`;
 
-    // Define response schema to prevent "Unknown" fallbacks
-    const responseSchema = {
-      type: "object",
-      properties: {
-        simple_category: {
-          type: "string",
-          enum: ["work", "learning", "browsing", "entertainment", "idle"]
-        },
-        category: { type: "string" },
-        category_emoji: { type: "string" },
-        category_color: { type: "string" },
-        app: { type: "string" },
-        task: { type: "string" },
-        confidence: { type: "number" },
-        detailed_context: {
-          type: "object",
-          properties: {
-            file_name: { type: "string" },
-            cursor_position: { type: "string" },
-            browser_url: { type: "string" },
-            full_description: { type: "string" },
-            progress_from_last: { type: "string" },
-            ai_observations: { type: "string" }
-          }
-        }
-      },
-      required: ["simple_category", "category", "category_emoji", "category_color", "app", "task", "confidence"]
-    };
+    // Get Portkey client with user metadata
+    const portkey = getPortkeyClient(`screenshot-${Date.now()}`, userId);
 
-    // Prepare request payload for Gemini API
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            { text: finalPrompt },
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: base64Image,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 4096,
-        responseMimeType: 'application/json',
-        responseSchema: responseSchema,
-        // Enable thinking mode for gemini-2.5-flash
-        // -1 = dynamic thinking budget (recommended)
-        // 0 = disable thinking
-        // >0 = specific token budget (e.g., 1024)
-        thinkingConfig: {
-          thinkingBudget: -1,
-        },
-      },
-    };
-
-    // Use the explicitly requested gemini-2.5-flash model
+    // Use Portkey's OpenAI-compatible API
+    // Portkey translates this to Gemini format automatically
     const model = "gemini-2.5-flash";
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      }
-    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API error:', response.status, errorText);
-      throw new Error(`Gemini API returned ${response.status}: ${errorText}`);
-    }
+    const response = await portkey.chat.completions.create({
+      model: model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: finalPrompt },
+            { type: "image_url", image_url: { url: imageUrl } }
+          ]
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 4096,
+      temperature: 0.4,
+    });
 
-    const data = await response.json();
-
-    // Extract the generated content
-    if (!data.candidates || data.candidates.length === 0) {
-      throw new Error('No candidates returned from Gemini API');
-    }
-
-    const candidate = data.candidates[0];
-    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-      throw new Error('No content parts in Gemini response');
-    }
-
-    const textResponse = candidate.content.parts[0].text;
+    // Extract the response text
+    const textResponse = response.choices[0].message.content;
 
     // Parse JSON response
     let analysis;
@@ -200,9 +163,9 @@ function buildPreviousContext(previousCaptures) {
  * @returns {boolean} True if valid
  */
 export function validateAnalysisSchema(analysis) {
-  const required = ['category', 'simple_category', 'app', 'task', 'confidence', 'detailed_context', 
-                    'category_emoji', 'category_color', 'analysis_version', 'timestamp'];
-  
+  const required = ['category', 'simple_category', 'app', 'task', 'confidence', 'detailed_context',
+    'category_emoji', 'category_color', 'analysis_version', 'timestamp'];
+
   return required.every(field => field in analysis);
 }
 
@@ -210,4 +173,3 @@ export default {
   analyzeScreenshot,
   validateAnalysisSchema,
 };
-
