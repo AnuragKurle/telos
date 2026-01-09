@@ -3,6 +3,9 @@ Analyze this screenshot. You have FULL AUTONOMY to interpret what you see.
 ## Previous Context
 {previous_context}
 
+## System Context (Trust this more than visual guess for App/Task)
+{system_context}
+
 ## Your Task
 Describe what the user is doing. Use your judgment - you're not constrained to predefined boxes.
 

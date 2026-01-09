@@ -13,6 +13,8 @@ from tui.widgets import StatusBanner, CurrentActivity, CategoryBreakdown, Recent
 from tui.widgets.day_heatmap import DayHeatmap
 from tui.widgets.activity_waveform import ActivityWaveform
 from tui.screens.feedback_modal import FeedbackModal
+from tui.screens.feedback_modal import FeedbackModal
+from tui.screens.upgrade_modal import UpgradeModal
 
 
 class DashboardScreen(Screen):
@@ -26,6 +28,7 @@ class DashboardScreen(Screen):
         Binding("space", "toggle_expanded", "", show=False),  # Hidden from footer
         Binding("left", "previous_day", "", show=False),  # Hidden from footer
         Binding("right", "next_day", "", show=False),  # Hidden from footer
+        Binding("u", "show_upgrade", "Upgrade to Pro", show=True),
         # Note: T for Timeline is inherited from app-level, lowercase 't' here is for "Today"
         Binding("shift+t", "jump_to_today", "", show=False),  # Shift+T for "Today" to avoid conflict
     ]
@@ -330,3 +333,16 @@ class DashboardScreen(Screen):
                 day_heatmap.selected_date = datetime.now().date()
             except:
                 pass
+
+    def action_show_upgrade(self) -> None:
+        """Show upgrade modal."""
+        # Get email from config
+        email = self.app.config.get('account', 'email', default="")
+        
+        # Initialize backend client
+        from core.backend_client import BackendClient
+        backend_url = self.app.config.get('backend', 'url', default="")
+        firebase_api_key = self.app.config.get('firebase', 'api_key', default="")
+        backend_client = BackendClient(backend_url, firebase_api_key)
+        
+        self.app.push_screen(UpgradeModal(backend_client, email))

@@ -4,10 +4,50 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Callable
+import sys
+from typing import Optional, Callable, Dict, Any
+
 import mss
 from PIL import Image
 from pynput import mouse, keyboard
+
+try:
+    if sys.platform == 'win32':
+        import win32gui
+        import win32process
+        import psutil
+except ImportError:
+    pass
+
+class WindowMonitor:
+    """Monitors active window and application."""
+    
+    def get_active_window_info(self) -> Dict[str, str]:
+        """Get active window title and app name.
+        
+        Returns:
+            Dict with 'title' and 'app_name' (empty strings if not available)
+        """
+        info = {'title': '', 'app_name': ''}
+        
+        if sys.platform != 'win32':
+            return info
+            
+        try:
+            hwnd = win32gui.GetForegroundWindow()
+            info['title'] = win32gui.GetWindowText(hwnd)
+            
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            if pid > 0:
+                try:
+                    process = psutil.Process(pid)
+                    info['app_name'] = process.name()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        except Exception as e:
+            print(f"Window monitor error: {e}")
+            
+        return info
 
 
 class ActivityMonitor:
@@ -24,6 +64,31 @@ class ActivityMonitor:
         self._mouse_listener: Optional[mouse.Listener] = None
         self._keyboard_listener: Optional[keyboard.Listener] = None
         self._running = False
+        
+        # Activity metrics (rate counters)
+        self.keystroke_count = 0
+        self.mouse_click_count = 0
+        self.mouse_move_distance = 0.0
+        self._last_mouse_pos = (0, 0)
+
+    def get_and_reset_metrics(self) -> Dict[str, Any]:
+        """Get accumulated metrics and reset counters.
+        
+        Returns:
+            Dict with 'keystrokes', 'mouse_clicks', 'mouse_distance'
+        """
+        metrics = {
+            'keystrokes': self.keystroke_count,
+            'mouse_clicks': self.mouse_click_count,
+            'mouse_distance': int(self.mouse_move_distance)
+        }
+        
+        # Reset counters
+        self.keystroke_count = 0
+        self.mouse_click_count = 0
+        self.mouse_move_distance = 0.0
+        
+        return metrics
 
     def _on_activity(self) -> None:
         """Called when any activity is detected."""
@@ -32,9 +97,17 @@ class ActivityMonitor:
     def _on_mouse_move(self, x: int, y: int) -> None:
         """Mouse move callback."""
         self._on_activity()
+        
+        # Calculate distance
+        if self._last_mouse_pos != (0, 0):
+            dist = ((x - self._last_mouse_pos[0])**2 + (y - self._last_mouse_pos[1])**2)**0.5
+            self.mouse_move_distance += dist
+        self._last_mouse_pos = (x, y)
 
     def _on_mouse_click(self, x: int, y: int, button, pressed: bool) -> None:
         """Mouse click callback."""
+        if pressed:
+            self.mouse_click_count += 1
         self._on_activity()
 
     def _on_mouse_scroll(self, x: int, y: int, dx: int, dy: int) -> None:
@@ -43,6 +116,7 @@ class ActivityMonitor:
 
     def _on_keyboard_press(self, key) -> None:
         """Keyboard press callback."""
+        self.keystroke_count += 1
         self._on_activity()
 
     def start(self) -> None:

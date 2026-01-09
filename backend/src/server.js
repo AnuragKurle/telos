@@ -12,12 +12,17 @@ import { initializeFirebase } from './config/firebase.js';
 import analyzeRoutes from './routes/analyze.js';
 import authRoutes from './routes/auth.js';
 import feedbackRoutes from './routes/feedback.js';
+import reportsRoutes from './routes/reports.js';
+import { startScheduler } from './services/scheduler.js';
 
 // Load environment variables
 dotenv.config();
 
 // Initialize Firebase Admin SDK
 initializeFirebase();
+
+// Start Background Scheduler
+startScheduler();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -28,8 +33,8 @@ app.use(express.json());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     service: 'telos-backend',
     version: '0.1.0',
     timestamp: new Date().toISOString()
@@ -50,6 +55,7 @@ app.get('/', (req, res) => {
 app.use('/v1/analyze', analyzeRoutes);
 app.use('/v1/auth', authRoutes);
 app.use('/v1/feedback', feedbackRoutes);
+app.use('/v1/reports', reportsRoutes);
 
 // 404 handler
 app.use((req, res) => {

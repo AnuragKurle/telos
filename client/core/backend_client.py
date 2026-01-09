@@ -321,6 +321,125 @@ class BackendClient:
         except requests.RequestException as e:
             raise BackendError(f"Network error: {e}")
 
+    def verify_access(
+        self,
+        email: str,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Verify access for email and start/resume trial.
+        
+        Args:
+            email: User's email address
+            retry_auth: Retry on token expiry
+            
+        Returns:
+            Dict with 'access' (bool), 'accessStatus' (str), 'trialStartDate', etc.
+            
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails or access denied
+        """
+        self._apply_rate_limit()
+        
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+            
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+            
+            response = requests.post(
+                f"{self.backend_url}/v1/auth/verify-access",
+                json={'email': email},
+                headers=headers,
+                timeout=self.timeout
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+                
+            elif response.status_code == 401:
+                if retry_auth:
+                    token = self.firebase_auth.get_token(force_refresh=True)
+                    return self.verify_access(email, retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed")
+                    
+            elif response.status_code == 403:
+                # Access Denied (Not on whitelist or Expired)
+                # Parse specific error message
+                data = response.json()
+                error_msg = data.get('message', 'Access Denied')
+                # Return the error payload so we can show specific UI
+                return {
+                    'access': False,
+                    'error': error_msg,
+                    'accessStatus': data.get('accessStatus', 'denied')
+                }
+                
+            elif response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 60))
+                error_msg = response.json().get('error', 'Rate limit exceeded')
+                raise RateLimitError(error_msg, retry_after)
+                
+            else:
+                raise BackendError(f"Server error: {response.status_code}")
+                
+        except requests.RequestException as e:
+            raise BackendError(f"Connection error: {e}")
+
+    def record_payment_intent(
+        self,
+        email: str,
+        retry_auth: bool = True
+    ) -> bool:
+        """Record user's intent to upgrade.
+        
+        Args:
+            email: User email
+            
+        Returns:
+            True if successful
+        """
+        self._apply_rate_limit()
+        
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError:
+            # Swallow auth error here to not block UI? Or re-raise?
+            # Better to re-raise, UI should handle it.
+            return False 
+            
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(
+                f"{self.backend_url}/v1/auth/record-payment-intent",
+                json={'email': email},
+                headers=headers,
+                timeout=self.timeout
+            )
+            
+            if response.status_code == 200:
+                return True
+            elif response.status_code == 401 and retry_auth:
+                self.firebase_auth.get_token(force_refresh=True)
+                return self.record_payment_intent(email, retry_auth=False)
+                
+            return False
+            
+        except Exception as e:
+            print(f"Error recording payment intent: {e}")
+            return False
+
 
 # Convenience function for testing
 def test_backend_connection(backend_url: str) -> bool:

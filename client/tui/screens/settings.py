@@ -11,6 +11,8 @@ from core.goal_manager import AnalysisGoalManager
 from core.backend_client import BackendClient, BackendError, AuthenticationError
 from tui.screens.goal_editor import GoalEditorModal
 from tui.screens.feedback_modal import FeedbackModal
+from tui.screens.feedback_modal import FeedbackModal
+from tui.screens.upgrade_modal import UpgradeModal
 
 
 class SettingsScreen(Screen):
@@ -18,6 +20,7 @@ class SettingsScreen(Screen):
 
     BINDINGS = [
         ("g", "edit_goals", "Edit Goals"),
+        ("u", "show_upgrade", "Upgrade to Pro"),
         ("escape", "app.pop_screen", "Back"),
         ("q", "app.quit", "Quit"),
     ]
@@ -202,3 +205,16 @@ Press ESC to return to dashboard
                 severity="error",
                 timeout=5
             )
+
+    def action_show_upgrade(self) -> None:
+        """Show upgrade modal."""
+        # Get email from config
+        email = self.app.config.get('account', 'email', default="")
+        
+        # Initialize backend client
+        backend_url = self.app.config.get('backend', 'url', default="")
+        firebase_api_key = self.app.config.get('firebase', 'api_key', default="")
+        backend_client = BackendClient(backend_url, firebase_api_key)
+        
+        self.app.push_screen(UpgradeModal(backend_client, email))
+

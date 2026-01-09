@@ -86,3 +86,77 @@ export async function sendSignupNotification(user) {
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Send Trial Activation Notification
+ * 
+ * @param {string} email - User email
+ * @param {Date} trialStartDate - When the trial started
+ */
+export async function sendTrialActivationNotification(email, trialStartDate) {
+  try {
+    const webhookUrl = await getSlackSignupWebhook(); // Reuse signup webhook for now
+    if (!webhookUrl) return { success: false, error: 'No webhook' };
+
+    const message = `🚀 *Trial Activated*\n> *User:* ${email}\n> *Started:* ${new Date(trialStartDate).toLocaleString()}`;
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: message
+        }
+      }
+    ];
+
+    await axios.post(webhookUrl, {
+      text: message,
+      blocks: blocks
+    });
+
+    console.log(`[SLACK] Trial activation notification sent for ${email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending trial notification:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Send Payment Intent Notification
+ * 
+ * @param {string} email - User email
+ */
+export async function sendPaymentIntentNotification(email) {
+  try {
+    const webhookUrl = await getSlackSignupWebhook(); // Reuse signup webhook
+    if (!webhookUrl) {
+      console.warn('[SLACK] No signup webhook found for payment intent.');
+      return { success: false, error: 'No webhook' };
+    }
+
+    const message = `💰 *PAYMENT INTENT DETECTED*\n> *User:* ${email}\n> *Action:* Clicked 'Upgrade to Pro'`;
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: message
+        }
+      }
+    ];
+
+    await axios.post(webhookUrl, {
+      text: message,
+      blocks: blocks
+    });
+
+    console.log(`[SLACK] Payment intent notification sent for ${email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending payment intent notification:', error.message);
+    return { success: false, error: error.message };
+  }
+}
