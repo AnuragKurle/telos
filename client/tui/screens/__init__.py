@@ -14,6 +14,8 @@ from .onboarding_complete import OnboardingCompleteScreen
 from .upgrade import UpgradeScreen
 from .help import HelpScreen
 from .feedback_modal import FeedbackModal
+from .activation import ActivationScreen
+from .upgrade_modal import UpgradeModal
 
 __all__ = [
     'DashboardScreen', 
@@ -30,4 +32,6 @@ __all__ = [
     'UpgradeScreen',
     'HelpScreen',
     'FeedbackModal',
+    'ActivationScreen',
+    'UpgradeModal',
 ]

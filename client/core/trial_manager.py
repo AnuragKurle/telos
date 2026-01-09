@@ -12,9 +12,9 @@ import json
 
 class TrialStatus:
     """Trial status constants."""
-    ACTIVE = "active"
-    EXPIRED = "expired"
-    UPGRADED = "upgraded"
+    ACTIVE = "active" # In trial
+    EXPIRED = "expired" # Trial over, not paid
+    PRO = "pro" # Paid user
     NOT_STARTED = "not_started"
 
 
@@ -37,12 +37,39 @@ class TrialManager:
             1: "last_day",
             0: "expired"
         }
+    
+    def activate_trial(self, email: str, start_date_iso: str, end_date_iso: str) -> None:
+        """Activate trial period from server response.
+        
+        Args:
+            email: User email
+            start_date_iso: ISO start date string
+            end_date_iso: ISO end date string
+        """
+        trial_config = self.config.config.get('trial', {})
+        trial_config['start_date'] = start_date_iso
+        trial_config['end_date'] = end_date_iso
+        trial_config['duration_days'] = self.trial_duration_days
+        
+        # Also update account info
+        account_config = self.config.config.get('account', {})
+        account_config['email'] = email
+        account_config['status'] = 'trial'
+        
+        self.config.config['trial'] = trial_config
+        self.config.config['account'] = account_config
+        self.config.save(self.config.config)
         
     def start_trial(self) -> None:
-        """Start the trial period."""
+        """Start the trial period locally (Legacy fallback)."""
         # Set trial start date in config
         trial_config = self.config.config.get('trial', {})
         trial_config['start_date'] = datetime.now().isoformat()
+        
+        # Calculate end date
+        end_date = datetime.now() + timedelta(days=self.trial_duration_days)
+        trial_config['end_date'] = end_date.isoformat()
+        
         trial_config['duration_days'] = self.trial_duration_days
         trial_config['upgrade_prompts_shown'] = 0
         
@@ -62,7 +89,7 @@ class TrialManager:
             return None
         
         try:
-            return datetime.fromisoformat(start_date_str)
+            return datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
         except ValueError:
             return None
     
@@ -72,6 +99,16 @@ class TrialManager:
         Returns:
             Expiry date or None if not started
         """
+        trial_config = self.config.config.get('trial', {})
+        end_date_str = trial_config.get('end_date')
+        
+        if end_date_str:
+            try:
+                return datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+                
+        # Fallback to calculation from start date
         start_date = self.get_trial_start_date()
         if not start_date:
             return None
@@ -84,35 +121,51 @@ class TrialManager:
         Returns:
             Days remaining (0 if expired, -1 if not started)
         """
-        start_date = self.get_trial_start_date()
-        if not start_date:
-            return -1
-        
         expiry_date = self.get_trial_expiry_date()
-        days_left = (expiry_date - datetime.now()).days
-        
+        if not expiry_date:
+            return -1
+            
+        # Handle timezones loosely by using naive or aware consistently implies complexity
+        # simpler to just check diff
+        if expiry_date.tzinfo and datetime.now().tzinfo is None:
+             now = datetime.now().astimezone()
+        else:
+             now = datetime.now()
+             
+        days_left = (expiry_date - now).days
         return max(0, days_left)
     
     def get_trial_status(self) -> str:
         """Get current trial status.
         
         Returns:
-            One of: TrialStatus.ACTIVE, EXPIRED, UPGRADED, NOT_STARTED
+            One of: TrialStatus.ACTIVE, EXPIRED, PRO, NOT_STARTED
         """
-        # Check if upgraded
+        # Check explicit status first (synced from server)
         account_config = self.config.config.get('account', {})
-        if account_config.get('auth_type') == 'email':
-            return TrialStatus.UPGRADED
+        explicit_status = account_config.get('status')
+        
+        if explicit_status == 'pro':
+            return TrialStatus.PRO
+        
+        if explicit_status == 'expired':
+            return TrialStatus.EXPIRED
         
         # Check if trial started
         start_date = self.get_trial_start_date()
         if not start_date:
             return TrialStatus.NOT_STARTED
         
-        # Check if expired
-        days_remaining = self.get_days_remaining()
-        if days_remaining <= 0:
-            return TrialStatus.EXPIRED
+        # Check if expired by date calculation
+        expiry_date = self.get_trial_expiry_date()
+        
+        # Handle timezone awareness check
+        now = datetime.now()
+        if expiry_date.tzinfo:
+            now = now.astimezone()
+            
+        if expiry_date < now:
+             return TrialStatus.EXPIRED
         
         return TrialStatus.ACTIVE
     
@@ -124,6 +177,14 @@ class TrialManager:
         """
         return self.get_trial_status() == TrialStatus.ACTIVE
     
+    def is_pro(self) -> bool:
+        """Check if user has Pro access.
+        
+        Returns:
+             True if Pro
+        """
+        return self.get_trial_status() == TrialStatus.PRO
+        
     def is_trial_expired(self) -> bool:
         """Check if trial has expired.
         
@@ -140,8 +201,12 @@ class TrialManager:
         """
         status = self.get_trial_status()
         
-        if status == TrialStatus.UPGRADED:
+        if status == TrialStatus.PRO:
             return None
+            
+        if status == TrialStatus.EXPIRED:
+             # Repetitively showing expired prompt handled by UI logic typically
+             return "expired"
         
         if status == TrialStatus.NOT_STARTED:
             return None
@@ -214,7 +279,7 @@ class TrialManager:
             'status': status,
             'is_active': status == TrialStatus.ACTIVE,
             'is_expired': status == TrialStatus.EXPIRED,
-            'is_upgraded': status == TrialStatus.UPGRADED,
+            'is_pro': status == TrialStatus.PRO,
             'start_date': start_date.isoformat() if start_date else None,
             'expiry_date': expiry_date.isoformat() if expiry_date else None,
             'days_remaining': days_remaining,
@@ -230,7 +295,7 @@ class TrialManager:
         """
         status = self.get_trial_status()
         
-        if status == TrialStatus.UPGRADED:
+        if status == TrialStatus.PRO:
             return "blue"
         
         if status == TrialStatus.EXPIRED:
@@ -253,7 +318,7 @@ class TrialManager:
         """
         status = self.get_trial_status()
         
-        if status == TrialStatus.UPGRADED:
+        if status == TrialStatus.PRO:
             return "Pro Account Active"
         
         if status == TrialStatus.EXPIRED:
@@ -271,17 +336,17 @@ class TrialManager:
         else:
             return f"{days_remaining} Days Remaining in Trial"
     
-    def mark_upgraded(self, email: str) -> None:
-        """Mark account as upgraded.
+    def mark_pro(self, email: str = None) -> None:
+        """Mark account as Pro (local override).
         
         Args:
             email: Email address linked to account
         """
         account_config = self.config.config.get('account', {})
-        account_config['auth_type'] = 'email'
-        account_config['email'] = email
+        if email:
+            account_config['email'] = email
+        account_config['status'] = 'pro'
         account_config['upgraded_at'] = datetime.now().isoformat()
         
         self.config.config['account'] = account_config
         self.config.save(self.config.config)
-

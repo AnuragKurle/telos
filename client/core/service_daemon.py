@@ -13,7 +13,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.database import Database
-    from core.capture import ActivityMonitor, ScreenshotCapture
+    from core.capture import ActivityMonitor, ScreenshotCapture, WindowMonitor
     from core.analyzer import GeminiAnalyzer
     from core.goal_manager import AnalysisGoalManager
     from core.session_builder import SessionBuilder
@@ -34,6 +34,15 @@ class ServiceDaemon:
         goal_manager: 'AnalysisGoalManager',
         capturer: 'ScreenshotCapture',
         activity_monitor: 'ActivityMonitor',
+        hasher: 'ScreenshotHasher',
+        session_builder: 'SessionBuilder',
+        daily_aggregator: 'DailyAggregator',
+        capturer: 'ScreenshotCapture',
+        activity_monitor: 'ActivityMonitor',
+        # Only passed if instantiated, but we can also instantiate internally if needed
+        # For dependency injection, we should probably add window_monitor to args, but 
+        # for minimal changes, we'll instantiate it here if not provided or just instantiate it.
+        # Let's instantiate it in __init__ for now as it's a new dependency.
         hasher: 'ScreenshotHasher',
         session_builder: 'SessionBuilder',
         daily_aggregator: 'DailyAggregator',
@@ -63,6 +72,10 @@ class ServiceDaemon:
         self.session_builder = session_builder
         self.daily_aggregator = daily_aggregator
         self.email_reporter = email_reporter
+        
+        # Initialize Window Monitor (new)
+        from core.capture import WindowMonitor
+        self.window_monitor = WindowMonitor()
 
         # Configuration
         self.capture_interval = config.get('capture', 'interval_seconds', default=30)
@@ -173,7 +186,23 @@ class ServiceDaemon:
                 previous_captures = self.db.get_previous_captures(limit=2)
 
                 # Analyze with Gemini (with context)
-                result = self.analyzer.analyze_with_fallback(screenshot_path, previous_captures)
+                # Get previous 2 captures for context (Phase 5)
+                previous_captures = self.db.get_previous_captures(limit=2)
+                
+                # Gather System Context (New)
+                window_info = self.window_monitor.get_active_window_info()
+                activity_metrics = self.activity_monitor.get_and_reset_metrics()
+                
+                context_metadata = {
+                    'window_title': window_info.get('title', ''),
+                    'app_name': window_info.get('app_name', ''),
+                    'keystrokes': activity_metrics.get('keystrokes', 0),
+                    'mouse_clicks': activity_metrics.get('mouse_clicks', 0),
+                    'mouse_distance': activity_metrics.get('mouse_distance', 0)
+                }
+
+                # Analyze with Gemini (with context)
+                result = self.analyzer.analyze_with_fallback(screenshot_path, previous_captures, context_metadata)
 
                 if result:
                     # Extract detailed_context
