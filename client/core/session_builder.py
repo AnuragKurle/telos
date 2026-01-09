@@ -371,13 +371,27 @@ Provide your analysis in JSON format:
         self.analyzer._apply_rate_limit()
 
         # Call Gemini API using new SDK pattern
+        import time as time_module
+        start_time = time_module.time()
         response = self.analyzer.client.models.generate_content(
             model=self.analyzer.model_name,
             contents=prompt,
             config=generation_config
         )
+        latency_ms = (time_module.time() - start_time) * 1000
 
         if not response.text:
             raise Exception("Empty response from Gemini API")
+
+        # Log to Portkey for observability
+        from core.analyzer import _log_to_portkey
+        _log_to_portkey(
+            prompt=prompt,
+            response_text=response.text,
+            model=self.analyzer.model_name,
+            call_type="session_enrichment",
+            latency_ms=latency_ms,
+            user_id=self.analyzer.user_email
+        )
 
         return json.loads(response.text)
