@@ -41,20 +41,33 @@ class CurrentActivity(Container):
         """Update the current activity display."""
         app = self.app
 
-        # Use emoji from data if available, with normalization
-        raw_emoji = getattr(app, 'current_emoji', '📝')
-        emoji = self._normalize_emoji(str(raw_emoji))
-
         # Calculate duration if activity started
         duration_str = "0s"
         if app.activity_start_time:
             elapsed = datetime.now() - app.activity_start_time
             duration_str = format_duration(int(elapsed.total_seconds()))
 
-        # Build display text
-        category_display = app.current_category.title()
-        color = getattr(app, 'current_color', '#ffffff')
-        display_text = f"[{color}]{emoji} [{category_display}][/][bold] {app.current_app} - {app.current_task}[/]  ⏱️  {duration_str}"
+        # Get basic app info with fallbacks
+        app_name = getattr(app, 'current_app', None)
+        
+        # If no app data at all, show waiting message
+        if not app_name or app_name == 'Unknown':
+            display_text = "⏳ Waiting for activity data..."
+        else:
+            # Check if we have enriched data or just raw capture
+            has_enriched = hasattr(app, 'current_task') and app.current_task and app.current_task != 'No activity'
+            
+            if has_enriched:
+                # Use enriched LLM data with emoji
+                raw_emoji = getattr(app, 'current_emoji', '📝')
+                emoji = self._normalize_emoji(str(raw_emoji))
+                category_display = app.current_category.title()
+                color = getattr(app, 'current_color', '#ffffff')
+                display_text = f"[{color}]{emoji} [{category_display}][/][bold] {app.current_app} - {app.current_task}[/]  ⏱️  {duration_str}"
+            else:
+                # Show raw window/file data immediately (before LLM enrichment)
+                window_title = getattr(app, 'current_window_title', 'No window')
+                display_text = f"📄 [bold]{app_name}[/] - {window_title}  ⏱️  {duration_str}"
 
         # Update widget
         self.query_one("#current-activity-display").update(display_text)

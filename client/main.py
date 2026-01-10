@@ -584,8 +584,8 @@ def run_onboarding(config, onboarding_mgr):
     """
     from textual.app import App
     from tui.screens import (
-        WelcomeScreen, PrivacyNoticeScreen, GoalSetupScreen, 
-        EmailSetupScreen, OnboardingCompleteScreen, ActivationScreen
+        WelcomeCarouselScreen, PrivacyNoticeScreen, GoalSetupScreen, 
+        PersonalSetupScreen, ZenCompleteScreen
     )
     from core.trial_manager import TrialManager
     from core.backend_client import BackendClient
@@ -613,40 +613,86 @@ def run_onboarding(config, onboarding_mgr):
         
         async def run_onboarding_flow(self) -> None:
             """Run the complete onboarding flow."""
-            # Welcome screen
-            result = await self.push_screen_wait(WelcomeScreen())
+            # 1. Welcome carousel
+            result = await self.push_screen_wait(WelcomeCarouselScreen())
             if not result:
                 self.exit()
                 return
             
-            # Privacy notice
-            result = await self.push_screen_wait(PrivacyNoticeScreen())
-            if not result:
+            # 2. Personal setup (name + email/password)
+            personal_result = await self.push_screen_wait(PersonalSetupScreen())
+            if not personal_result:
                 self.exit()
                 return
             
-            # Activation Screen (New)
-            # We enforce activation here.
-            await self.push_screen_wait(ActivationScreen(self.backend_client, self.trial_manager))
+            user_name = personal_result['name']
+            email = personal_result['email']
+            password = personal_result['password']
             
-            # Backend connection test (if enabled)
+            # Firebase authentication
+            firebase_api_key = self.config.config.get('firebase', {}).get('api_key', "")
+            if firebase_api_key:
+                try:
+                    self.notify("Creating account...", severity="information")
+                    firebase_auth = FirebaseAuth(firebase_api_key)
+                    
+                    # Try to sign up (create new account)
+                    try:
+                        token = firebase_auth.sign_up_with_email(email, password)
+                        self.notify("✓ Account created successfully", severity="success")
+                    except Exception as signup_error:
+                        # If signup fails (email already exists), try sign-in
+                        if "EMAIL_EXISTS" in str(signup_error):
+                            token = firebase_auth.sign_in_with_email(email, password)
+                            self.notify("✓ Signed in successfully", severity="success")
+                        else:
+                            raise signup_error
+                    
+                    # Save name and email to config
+                    account_config = self.config.config.get('account', {})
+                    account_config['name'] = user_name
+                    account_config['email'] = email
+                    self.config.config['account'] = account_config
+                    self.config.save(self.config.config)
+                    
+                except Exception as auth_error:
+                    self.notify(f"✗ Authentication failed: {str(auth_error)}", severity="error")
+                    self.exit()
+                    return
+            else:
+                # Save without Firebase
+                account_config = self.config.config.get('account', {})
+                account_config['name'] = user_name
+                account_config['email'] = email
+                self.config.config['account'] = account_config
+                self.config.save(self.config.config)
+            
+            # Silent trial activation in background
             backend_enabled = self.config.get('backend', 'enabled', default=False)
             if backend_enabled:
                 backend_url = self.config.get('backend', 'url', default="")
                 if backend_url:
                     try:
-                        # Test connection without auth
-                        import requests
-                        response = requests.get(f"{backend_url}/health", timeout=5)
-                        if response.status_code == 200:
-                            self.notify("✓ Backend connected successfully", severity="information")
-                        else:
-                            self.notify("⚠ Backend connection failed - using local mode", severity="warning")
+                        # Silently verify access and start trial
+                        trial_response = self.backend_client.verify_access(email)
+                        if trial_response.get('access'):
+                            self.trial_manager.activate_trial(
+                                email,
+                                trial_response['trialStartDate'],
+                                trial_response['trialEndDate']
+                            )
                     except:
-                        self.notify("⚠ Backend unreachable - using local mode", severity="warning")
+                        # If backend fails, start local trial
+                        self.trial_manager.start_trial()
+                else:
+                    # No backend URL, start local trial
+                    self.trial_manager.start_trial()
+            else:
+                # Backend disabled, start local trial
+                self.trial_manager.start_trial()
             
-            # Optional: Goals setup
-            goal_result = await self.push_screen_wait(GoalSetupScreen())
+            # 3. Goal setup (optional)
+            goal_result = await self.push_screen_wait(GoalSetupScreen(user_name=user_name))
             if goal_result:
                 db = Database(self.config.get('storage', 'database_path'))
                 goal_manager = AnalysisGoalManager(db)
@@ -656,21 +702,21 @@ def run_onboarding(config, onboarding_mgr):
                 )
                 self.notify("✓ Goals configured", severity="success")
             
-            # Optional: Email setup
-            email_result = await self.push_screen_wait(EmailSetupScreen())
-            if email_result:
+            # 4. Privacy notice
+            result = await self.push_screen_wait(PrivacyNoticeScreen())
+            if not result:
+                self.exit()
+                return
+            
+            # 5. Zen of Telos completion
+            zen_result = await self.push_screen_wait(ZenCompleteScreen())
+            if zen_result:
+                # Save email report time preference
+                send_time = zen_result.get('send_time', '21:00')
                 email_config = self.config.config.get('email', {})
-                email_config['enabled'] = True
-                email_config['sender_email'] = email_result['email']
-                email_config['recipient_email'] = email_result['email']
-                email_config['sender_password'] = email_result['password']
-                email_config['send_time'] = email_result['send_time']
+                email_config['send_time'] = send_time
                 self.config.config['email'] = email_config
                 self.config.save(self.config.config)
-                self.notify("✓ Email configured", severity="success")
-            
-            # Completion screen
-            await self.push_screen_wait(OnboardingCompleteScreen())
             
             # Mark onboarding complete
             self.onboarding_mgr.mark_complete()

@@ -24,7 +24,9 @@ class FirebaseAuth:
     """Manages Firebase anonymous authentication and token refresh."""
     
     # Firebase REST API endpoints
-    SIGNUP_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signUp"
+    SIGNUP_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signUp"  # For anonymous sign-up
+    SIGNUP_WITH_EMAIL_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signUp"  # Same endpoint, different params
+    SIGNIN_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
     REFRESH_URL = "https://securetoken.googleapis.com/v1/token"
     
     def __init__(self, api_key: str, storage_dir: str = "~/.telos"):
@@ -131,6 +133,114 @@ class FirebaseAuth:
             })
             
             print("[OK] Firebase anonymous sign-in successful")
+            return id_token
+            
+        except requests.RequestException as e:
+            raise FirebaseAuthError(f"Network error during sign-in: {e}")
+    
+    def sign_up_with_email(self, email: str, password: str) -> str:
+        """Sign up with email and password.
+        
+        Args:
+            email: User email address
+            password: User password (minimum 6 characters)
+            
+        Returns:
+            Firebase ID token
+            
+        Raises:
+            FirebaseAuthError: If sign-up fails
+        """
+        try:
+            response = requests.post(
+                f"{self.SIGNUP_WITH_EMAIL_URL}?key={self.api_key}",
+                json={
+                    "email": email,
+                    "password": password,
+                    "returnSecureToken": True
+                },
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                error_msg = response.json().get('error', {}).get('message', 'Unknown error')
+                raise FirebaseAuthError(f"Sign-up failed: {error_msg}")
+            
+            data = response.json()
+            
+            # Extract tokens
+            id_token = data['idToken']
+            refresh_token = data['refreshToken']
+            expires_in = int(data['expiresIn'])
+            
+            # Cache in memory
+            self._cached_token = id_token
+            self._token_expiry = datetime.now() + timedelta(seconds=expires_in)
+            
+            # Save to disk
+            self._save_auth_data({
+                'refresh_token': refresh_token,
+                'id_token': id_token,
+                'expires_at': self._token_expiry.isoformat(),
+                'signed_in_at': datetime.now().isoformat(),
+                'email': email,  # Store email for reference
+            })
+            
+            print(f"[OK] Firebase sign-up successful: {email}")
+            return id_token
+            
+        except requests.RequestException as e:
+            raise FirebaseAuthError(f"Network error during sign-up: {e}")
+    
+    def sign_in_with_email(self, email: str, password: str) -> str:
+        """Sign in with email and password.
+        
+        Args:
+            email: User email address
+            password: User password
+            
+        Returns:
+            Firebase ID token
+            
+        Raises:
+            FirebaseAuthError: If sign-in fails
+        """
+        try:
+            response = requests.post(
+                f"{self.SIGNIN_URL}?key={self.api_key}",
+                json={
+                    "email": email,
+                    "password": password,
+                    "returnSecureToken": True
+                },
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                error_msg = response.json().get('error', {}).get('message', 'Unknown error')
+                raise FirebaseAuthError(f"Sign-in failed: {error_msg}")
+            
+            data = response.json()
+            
+            # Extract tokens
+            id_token = data['idToken']
+            refresh_token = data['refreshToken']
+            expires_in = int(data['expiresIn'])
+            
+            # Cache in memory
+            self._cached_token = id_token
+            self._token_expiry = datetime.now() + timedelta(seconds=expires_in)
+            
+            # Save to disk
+            self._save_auth_data({
+                'refresh_token': refresh_token,
+                'id_token': id_token,
+                'expires_at': self._token_expiry.isoformat(),
+                'signed_in_at': datetime.now().isoformat(),
+                'email': email,
+            })
+            
+            print(f"[OK] Firebase sign-in successful: {email}")
             return id_token
             
         except requests.RequestException as e:

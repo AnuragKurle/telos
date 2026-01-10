@@ -37,15 +37,6 @@ class ServiceDaemon:
         hasher: 'ScreenshotHasher',
         session_builder: 'SessionBuilder',
         daily_aggregator: 'DailyAggregator',
-        capturer: 'ScreenshotCapture',
-        activity_monitor: 'ActivityMonitor',
-        # Only passed if instantiated, but we can also instantiate internally if needed
-        # For dependency injection, we should probably add window_monitor to args, but 
-        # for minimal changes, we'll instantiate it here if not provided or just instantiate it.
-        # Let's instantiate it in __init__ for now as it's a new dependency.
-        hasher: 'ScreenshotHasher',
-        session_builder: 'SessionBuilder',
-        daily_aggregator: 'DailyAggregator',
         email_reporter: Optional['EmailReporter'] = None
     ):
         """Initialize service daemon.
@@ -73,9 +64,10 @@ class ServiceDaemon:
         self.daily_aggregator = daily_aggregator
         self.email_reporter = email_reporter
         
-        # Initialize Window Monitor (new)
-        from core.capture import WindowMonitor
+        # Initialize Window Monitor and Event Tracker (for window activity chain)
+        from core.capture import WindowMonitor, WindowEventTracker
         self.window_monitor = WindowMonitor()
+        self.window_event_tracker = WindowEventTracker(self.window_monitor)
 
         # Configuration
         self.capture_interval = config.get('capture', 'interval_seconds', default=30)
@@ -157,11 +149,24 @@ class ServiceDaemon:
 
         while self.running:
             try:
+                # Start window event tracking for this interval
+                self.window_event_tracker.start_interval()
+                
+                # Start background polling for window changes
+                poll_stop_event = threading.Event()
+                poll_thread = threading.Thread(
+                    target=self._poll_window_changes_bg,
+                    args=(poll_stop_event,),
+                    daemon=True
+                )
+                poll_thread.start()
+                
                 # Check if idle
                 if self.activity_monitor.is_idle():
                     idle_time = self.activity_monitor.seconds_since_activity()
                     if idle_time % 60 == 0:  # Log every minute
                         print(f"[Capture Worker] IDLE - No activity for {idle_time}s")
+                    poll_stop_event.set()
                     time.sleep(5)
                     continue
 
@@ -170,27 +175,33 @@ class ServiceDaemon:
                 if api_usage >= self.max_daily_requests:
                     if api_usage == self.max_daily_requests:  # Only log once
                         print(f"[Capture Worker] QUOTA EXCEEDED - {api_usage}/{self.max_daily_requests}")
+                    poll_stop_event.set()
                     time.sleep(self.capture_interval)
                     continue
 
+                # Wait for capture interval minus polling overhead
+                time.sleep(max(1, self.capture_interval - 2))
+                
+                # Stop polling before capture
+                poll_stop_event.set()
+                poll_thread.join(timeout=1)
+                
                 # Capture screenshot
                 screenshot_path = self.capturer.capture()
 
                 # Check for duplicates
                 if self.hasher.is_duplicate(screenshot_path):
                     self.capturer.cleanup_screenshot(screenshot_path)
-                    time.sleep(self.capture_interval)
                     continue
 
-                # Get previous 2 captures for context (Phase 5)
-                previous_captures = self.db.get_previous_captures(limit=2)
-
-                # Analyze with Gemini (with context)
-                # Get previous 2 captures for context (Phase 5)
+                # Get previous 2 captures for context
                 previous_captures = self.db.get_previous_captures(limit=2)
                 
-                # Gather System Context (New)
-                window_info = self.window_monitor.get_active_window_info()
+                # Get window activity summary for this interval
+                window_summary = self.window_event_tracker.get_interval_summary()
+                
+                # Gather System Context with window activity chain
+                window_info = window_summary['current_window']
                 activity_metrics = self.activity_monitor.get_and_reset_metrics()
                 
                 context_metadata = {
@@ -198,10 +209,19 @@ class ServiceDaemon:
                     'app_name': window_info.get('app_name', ''),
                     'keystrokes': activity_metrics.get('keystrokes', 0),
                     'mouse_clicks': activity_metrics.get('mouse_clicks', 0),
-                    'mouse_distance': activity_metrics.get('mouse_distance', 0)
+                    'mouse_distance': activity_metrics.get('mouse_distance', 0),
+                    # Window activity chain data
+                    'window_changes': window_summary['total_changes'],
+                    'window_events': self.window_event_tracker.get_limited_events(limit=5),
                 }
+                
+                # DEBUG: Write context metadata to file
+                with open('debug_context.log', 'a') as f:
+                    f.write(f"\n[{datetime.now()}] context_metadata: {context_metadata}\n")
+                    f.write(f"  window_info: {window_info}\n")
+                    f.write(f"  window_summary: {window_summary}\n")
 
-                # Analyze with Gemini (with context)
+                # Analyze with Gemini (with enriched context)
                 result = self.analyzer.analyze_with_fallback(screenshot_path, previous_captures, context_metadata)
 
                 if result:
@@ -210,7 +230,7 @@ class ServiceDaemon:
                     detailed_context_json = json.dumps(detailed_context) if detailed_context else None
 
                     # Save to database with detailed_context and AI autonomy fields
-                    self.db.insert_capture(
+                    capture_id = self.db.insert_capture(
                         timestamp=datetime.now(),
                         category=result['category'],
                         app_name=result['app'],
@@ -220,23 +240,39 @@ class ServiceDaemon:
                         category_emoji=result.get('category_emoji'),
                         category_color=result.get('category_color')
                     )
+                    
+                    # Save window activity log
+                    if window_summary['total_changes'] > 0 or window_summary['events']:
+                        self.db.insert_window_activity_log(
+                            capture_id=capture_id,
+                            interval_start=window_summary['interval_start'],
+                            interval_end=window_summary['interval_end'],
+                            total_window_changes=window_summary['total_changes'],
+                            events_json=json.dumps(window_summary['events']),
+                            current_window_title=window_info.get('title', ''),
+                            current_app_name=window_info.get('app_name', ''),
+                            apps_visited=','.join(window_summary.get('apps_visited', []))
+                        )
 
                     # Increment API usage
                     self.db.increment_api_usage()
 
-                    print(f"[Capture Worker] Captured: [{result['category']}] {result['app']} - {result['task'][:50]}")
+                    print(f"[Capture Worker] Captured: [{result['category']}] {result['app']} - {result['task'][:50]} (switches: {window_summary['total_changes']})")
 
                 # Cleanup screenshot
                 self.capturer.cleanup_screenshot(screenshot_path)
-
-                # Wait for next interval
-                time.sleep(self.capture_interval)
 
             except Exception as e:
                 print(f"[Capture Worker] Error: {e}")
                 time.sleep(self.capture_interval)
 
         print("[Capture Worker] Stopped")
+    
+    def _poll_window_changes_bg(self, stop_event: threading.Event):
+        """Background polling for window changes (1s interval)."""
+        while not stop_event.is_set():
+            self.window_event_tracker.poll_window_changes()
+            stop_event.wait(1)  # Poll every 1 second
 
     def _session_worker(self):
         """Session worker loop (checks every 60s for triggers)."""

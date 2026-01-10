@@ -45,12 +45,15 @@ class StatusBanner(Static):
 
         emoji, status_text = status_map.get(app.loop_status, ("⚪", "UNKNOWN"))
 
-        # Format idle time compactly
-        idle = app.idle_seconds
-        if idle < 60:
-            idle_str = f"{idle}s"
-        else:
-            idle_str = f"{idle//60}m {idle%60}s"
+        # Format idle time compactly (only show if actually idle)
+        idle_msg = ""
+        if app.loop_status == "idle":
+            idle = app.idle_seconds
+            if idle < 60:
+                idle_str = f"{idle}s"
+            else:
+                idle_str = f"{idle//60}m {idle%60}s"
+            idle_msg = f"   •   Idle: {idle_str}"
 
         # Build status line with clearer separation
         # Uses wide spacing
@@ -60,6 +63,6 @@ class StatusBanner(Static):
         elif app.last_analysis_source == "local":
             source_indicator = "   •   💻 Local"
 
-        status_line = f" {emoji} {status_text}   •   Idle: {idle_str}{source_indicator}{trial_msg} "
+        status_line = f" {emoji} {status_text}{idle_msg}{source_indicator}{trial_msg} "
 
         self.update(status_line)

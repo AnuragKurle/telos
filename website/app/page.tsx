@@ -46,6 +46,11 @@ export default function Home() {
               <Twitter className="w-5 h-5" />
             </a>
           </div>
+          <div className="flex items-center gap-6 mt-4 md:mt-0">
+            <a href="/privacy" className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors">
+              Privacy Policy
+            </a>
+          </div>
         </div>
       </footer>
     </main>

@@ -21,7 +21,7 @@ class DashboardScreen(Screen):
     """Main dashboard screen showing live activity tracking."""
 
     # View mode: "60min" (waveform) or "day" (full day heatmap)
-    graph_mode = reactive("60min")
+    graph_mode = reactive("day")
 
     BINDINGS = [
         Binding("v", "toggle_graph_mode", "", show=False),  # Hidden from footer (V for View)
@@ -59,12 +59,30 @@ class DashboardScreen(Screen):
         padding: 0 1;
         margin-bottom: 1;
     }
+    
+    #greeting {
+        text-align: center;
+        color: $accent;
+        text-style: bold;
+        margin-bottom: 1;
+        padding: 1 2;
+        background: $surface-lighten-1;
+        border-bottom: wide $accent;
+    }
+    
+    #current-activity-title {
+        text-style: bold;
+        color: $accent;
+        text-align: center;
+        padding: 0;
+        margin-bottom: 0;
+    }
 
     #current-activity-display {
-        content-align: center middle;
+        content-align: left middle;
         text-style: bold;
         color: $text;
-        height: 100%;
+        height: 2;
     }
 
     #middle-section {
@@ -158,13 +176,14 @@ class DashboardScreen(Screen):
         yield StatusBanner(id="status-banner")
         
         with Container(id="main-container"):
+            yield Static(self.get_greeting(), id="greeting")
             yield CurrentActivity(id="current-activity")
             
             with Horizontal(id="middle-section"):
                 yield CategoryBreakdown(id="category-breakdown")
                 yield ActivityWaveform(id="waveform-graph")
                 yield DayHeatmap(id="day-heatmap")
-                
+            
             yield RecentTimeline(id="recent-timeline")
 
         yield Static("✨ Press 'A' for AI Chat", id="ai-chat-hint")
@@ -346,3 +365,22 @@ class DashboardScreen(Screen):
         backend_client = BackendClient(backend_url, firebase_api_key)
         
         self.app.push_screen(UpgradeModal(backend_client, email))
+
+    def get_greeting(self) -> str:
+        """Get time-based creative greeting."""
+        hour = datetime.now().hour
+        config = self.app.config
+        name = config.get('account', 'name', default='User')
+        
+        if 0 <= hour < 5:
+            period = "Hello, Night Owl 🦉"
+        elif 5 <= hour < 12:
+            period = "Good morning ☀️"
+        elif 12 <= hour < 17:
+            period = "Good afternoon 👋"
+        elif 17 <= hour < 22:
+            period = "Good evening 🌆"
+        else:
+            period = "Working late 🌙"
+            
+        return f"{period}, {name}"

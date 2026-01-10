@@ -34,8 +34,8 @@ def _log_to_portkey(prompt: str, response_text: str, model: str, call_type: str 
                 portkey = Portkey(
                     api_key=PORTKEY_API_KEY,
                     virtual_key=PORTKEY_VIRTUAL_KEY,
+                    user=user_id or "telos-client",  # Top-level user parameter for Portkey logs
                     metadata={
-                        "_user": user_id or "telos-client",
                         "call_type": call_type,
                         "source": "telos-client",
                         "model": model,

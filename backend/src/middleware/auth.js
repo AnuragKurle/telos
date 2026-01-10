@@ -62,6 +62,12 @@ export async function verifyFirebaseToken(req, res, next) {
       exp: decodedToken.exp,
     };
 
+    // Log warning if email is missing (for migration tracking)
+    // TODO: Re-enable strict validation after user migration
+    if (!req.user.email) {
+      console.warn(`[AUTH] User ${req.user.uid} has no email - using UID for Portkey`);
+    }
+
     // Continue to next middleware
     next();
   } catch (error) {

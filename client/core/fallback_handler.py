@@ -71,13 +71,15 @@ class FallbackHandler:
     def analyze_screenshot(
         self,
         image_path: str,
-        previous_captures: Optional[List[Dict]] = None
+        previous_captures: Optional[List[Dict]] = None,
+        context_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Analyze screenshot with fallback logic.
         
         Args:
             image_path: Path to screenshot
             previous_captures: Previous captures for context
+            context_metadata: System-level metadata (active window, activity metrics)
             
         Returns:
             Analysis result dict
@@ -88,7 +90,7 @@ class FallbackHandler:
         if use_backend and self.backend_client:
             try:
                 # Try backend first
-                result = self._analyze_with_backend(image_path, previous_captures)
+                result = self._analyze_with_backend(image_path, previous_captures, context_metadata)
                 self._on_backend_success()
                 return result
                 
@@ -100,7 +102,7 @@ class FallbackHandler:
                     raise  # Don't fall back if user wants backend-only
                 
                 print(f"Falling back to local analysis...")
-                return self._analyze_with_local(image_path, previous_captures)
+                return self._analyze_with_local(image_path, previous_captures, context_metadata)
             
             except (BackendError, AuthenticationError) as e:
                 print(f"\n[WARN] Backend error: {e}")
@@ -111,10 +113,10 @@ class FallbackHandler:
                 
                 print(f"Falling back to local analysis...")
                 self.stats['fallback_count'] += 1
-                return self._analyze_with_local(image_path, previous_captures)
+                return self._analyze_with_local(image_path, previous_captures, context_metadata)
         
         # Use local analyzer
-        return self._analyze_with_local(image_path, previous_captures)
+        return self._analyze_with_local(image_path, previous_captures, context_metadata)
     
     def _should_use_backend(self) -> bool:
         """Decide whether to try using the backend.
@@ -187,19 +189,21 @@ class FallbackHandler:
     def _analyze_with_backend(
         self,
         image_path: str,
-        previous_captures: Optional[List[Dict]] = None
+        previous_captures: Optional[List[Dict]] = None,
+        context_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Analyze using backend API.
         
         Args:
             image_path: Path to screenshot
             previous_captures: Previous captures for context
+            context_metadata: System-level metadata (active window, activity metrics)
             
         Returns:
             Analysis result
         """
         self.stats['backend_requests'] += 1
-        result = self.backend_client.analyze_screenshot(image_path, previous_captures)
+        result = self.backend_client.analyze_screenshot(image_path, previous_captures, context_metadata)
         
         # Add metadata
         result['_source'] = 'backend'
@@ -210,13 +214,15 @@ class FallbackHandler:
     def _analyze_with_local(
         self,
         image_path: str,
-        previous_captures: Optional[List[Dict]] = None
+        previous_captures: Optional[List[Dict]] = None,
+        context_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Analyze using local Gemini.
         
         Args:
             image_path: Path to screenshot
             previous_captures: Previous captures for context
+            context_metadata: System-level metadata (active window, activity metrics)
             
         Returns:
             Analysis result
@@ -224,14 +230,16 @@ class FallbackHandler:
         self.stats['local_requests'] += 1
         result = self.local_analyzer.analyze_screenshot_with_context(
             image_path,
-            previous_captures
+            previous_captures,
+            context_metadata
         )
         
         if result is None:
             # Use fallback result
             result = self.local_analyzer.analyze_with_fallback(
                 image_path,
-                previous_captures
+                previous_captures,
+                context_metadata
             )
         
         # Add metadata
