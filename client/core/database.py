@@ -125,6 +125,33 @@ class Database:
                     simple_cat = self._categorize_activity(row['category'])
                     cursor.execute('UPDATE captures SET simple_category = ? WHERE id = ?', 
                                  (simple_cat, row['id']))
+            
+            # Window Activity Log table - tracks window switches between screenshots
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS window_activity_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    capture_id INTEGER,
+                    interval_start DATETIME,
+                    interval_end DATETIME,
+                    total_window_changes INTEGER DEFAULT 0,
+                    events_json TEXT,
+                    current_window_title TEXT,
+                    current_app_name TEXT,
+                    apps_visited TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (capture_id) REFERENCES captures(id)
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_window_activity_capture
+                ON window_activity_log(capture_id)
+            ''')
+            
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_window_activity_time
+                ON window_activity_log(interval_start, interval_end)
+            ''')
 
     def insert_capture(
         self,
@@ -775,3 +802,126 @@ class Database:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM daily_summaries WHERE date = ?', (date_str,))
+
+    # Window Activity Log Methods (Phase 2 - Window Tracking Enhancement)
+    
+    def insert_window_activity_log(
+        self,
+        capture_id: int,
+        interval_start: str,
+        interval_end: str,
+        total_window_changes: int,
+        events_json: str,
+        current_window_title: str,
+        current_app_name: str,
+        apps_visited: str = None
+    ) -> int:
+        """Insert window activity log entry.
+        
+        Args:
+            capture_id: ID of the associated capture
+            interval_start: ISO format start time of the interval
+            interval_end: ISO format end time of the interval
+            total_window_changes: Number of window switches
+            events_json: JSON string of window change events
+            current_window_title: Window title at capture time
+            current_app_name: App name at capture time
+            apps_visited: Comma-separated list of apps visited
+            
+        Returns:
+            Window activity log ID
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO window_activity_log (
+                    capture_id, interval_start, interval_end,
+                    total_window_changes, events_json,
+                    current_window_title, current_app_name, apps_visited
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                capture_id, interval_start, interval_end,
+                total_window_changes, events_json,
+                current_window_title, current_app_name, apps_visited
+            ))
+            return cursor.lastrowid
+    
+    def get_window_activity_for_capture(self, capture_id: int) -> Optional[Dict[str, Any]]:
+        """Get window activity log for a specific capture.
+        
+        Args:
+            capture_id: Capture ID
+            
+        Returns:
+            Window activity dict or None if not found
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM window_activity_log
+                WHERE capture_id = ?
+            ''', (capture_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def get_window_activity_for_timerange(
+        self,
+        start_time: datetime,
+        end_time: datetime
+    ) -> List[Dict[str, Any]]:
+        """Get all window activity within a time range.
+        
+        Useful for Ask AI context building.
+        
+        Args:
+            start_time: Start of time range
+            end_time: End of time range
+            
+        Returns:
+            List of window activity dicts
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM window_activity_log
+                WHERE interval_start >= ? AND interval_end <= ?
+                ORDER BY interval_start
+            ''', (start_time.isoformat(), end_time.isoformat()))
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_window_activity_stats_for_date(self, date: datetime) -> Dict[str, Any]:
+        """Get aggregated window activity statistics for a date.
+        
+        Args:
+            date: Date to get stats for
+            
+        Returns:
+            Dict with total_switches, apps_histogram, avg_switches_per_interval
+        """
+        start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+        
+        activities = self.get_window_activity_for_timerange(start_of_day, end_of_day)
+        
+        total_switches = sum(a.get('total_window_changes', 0) for a in activities)
+        
+        # Count app occurrences
+        import json
+        apps_count: Dict[str, int] = {}
+        for activity in activities:
+            try:
+                events = json.loads(activity.get('events_json', '[]'))
+                for event in events:
+                    app = event.get('app_name', 'unknown')
+                    if app:
+                        apps_count[app] = apps_count.get(app, 0) + 1
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        return {
+            'total_switches': total_switches,
+            'intervals_tracked': len(activities),
+            'avg_switches_per_interval': total_switches / len(activities) if activities else 0,
+            'apps_histogram': apps_count,
+        }
+

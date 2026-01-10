@@ -16,24 +16,20 @@ class GoalSetupScreen(Screen):
     
     # Goal presets
     GOALS = {
-        "productivity": {
-            "name": "🎯 Track Productivity Patterns",
-            "description": "Focus on work efficiency and time management"
-        },
-        "learning": {
-            "name": "📚 Understand Learning Sessions",
-            "description": "Track study habits and skill development"
+        "time_tracking": {
+            "name": "🕐 How I spend my time",
+            "description": "Understand your daily patterns and where time goes"
         },
         "client_work": {
-            "name": "💼 Log Work for Clients/Reports",
-            "description": "Detailed activity logs for billing and reporting"
+            "name": "💼 Track work for clients/billing",
+            "description": "Detailed activity logs for invoicing and reporting"
         },
-        "journaling": {
-            "name": "🔍 General Work Journaling",
-            "description": "Comprehensive tracking of all activities"
+        "learning": {
+            "name": "📚 Understand my learning habits",
+            "description": "Track study sessions and skill development"
         },
         "custom": {
-            "name": "✏️ Custom Goal",
+            "name": "✏️ Something else (custom)",
             "description": "Define your own tracking focus"
         }
     }
@@ -100,16 +96,20 @@ class GoalSetupScreen(Screen):
     }
     """
     
-    def __init__(self):
+    def __init__(self, user_name: str = ""):
         super().__init__()
+        self.user_name = user_name
         self.selected_goal = None
         self.custom_text = ""
     
     def compose(self) -> ComposeResult:
         """Compose the goal setup screen."""
+        # Personalize title if name is provided
+        title = f"What do you want to understand, {self.user_name}?" if self.user_name else "What do you want to understand?"
+        
         with Center():
             with Vertical(id="goal-container"):
-                yield Static("Set Your Analysis Goals", id="goal-title")
+                yield Static(title, id="goal-title")
                 yield Static("(Optional - you can change this later)", id="goal-subtitle")
                 
                 with ScrollableContainer(id="goals-scroll"):

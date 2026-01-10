@@ -120,6 +120,7 @@ class BackendClient:
         self,
         image_path: str,
         previous_captures: Optional[List[Dict]] = None,
+        context_metadata: Optional[Dict[str, Any]] = None,
         retry_auth: bool = True
     ) -> Dict[str, Any]:
         """Upload screenshot for analysis.
@@ -127,6 +128,7 @@ class BackendClient:
         Args:
             image_path: Path to screenshot image
             previous_captures: List of previous captures for context
+            context_metadata: System-level metadata (active window, activity metrics)
             retry_auth: Retry with fresh token if auth fails
             
         Returns:
@@ -154,11 +156,15 @@ class BackendClient:
                 data = {}
                 if previous_captures:
                     data['previous_context'] = json.dumps(previous_captures)
+                if context_metadata:
+                    data['context_metadata'] = json.dumps(context_metadata)
+                    print(f"[DEBUG] Sending context_metadata to backend: {json.dumps(context_metadata)[:200]}")
                 
                 headers = {
                     'Authorization': f'Bearer {token}',
                     'X-Client-Version': self.CLIENT_VERSION,
                 }
+
                 
                 response = requests.post(
                     f"{self.backend_url}/v1/analyze/screenshot",
@@ -177,7 +183,7 @@ class BackendClient:
                 if retry_auth:
                     print("Token expired, refreshing...")
                     token = self.firebase_auth.get_token(force_refresh=True)
-                    return self.analyze_screenshot(image_path, retry_auth=False)
+                    return self.analyze_screenshot(image_path, previous_captures, context_metadata, retry_auth=False)
                 else:
                     raise AuthenticationError("Authentication failed after token refresh")
             

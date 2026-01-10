@@ -28,7 +28,7 @@ class WindowMonitor:
         Returns:
             Dict with 'title' and 'app_name' (empty strings if not available)
         """
-        info = {'title': '', 'app_name': ''}
+        info = {'title': '', 'app_name': '', 'process_name': ''}
         
         if sys.platform != 'win32':
             return info
@@ -42,12 +42,105 @@ class WindowMonitor:
                 try:
                     process = psutil.Process(pid)
                     info['app_name'] = process.name()
+                    info['process_name'] = process.name()
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     pass
         except Exception as e:
             print(f"Window monitor error: {e}")
             
         return info
+
+
+class WindowEventTracker:
+    """Tracks window and tab changes between screenshots.
+    
+    This class monitors window switches during the capture interval (typically 30s)
+    and provides a summary of all window activity for LLM context enrichment.
+    """
+    
+    def __init__(self, window_monitor: WindowMonitor):
+        """Initialize window event tracker.
+        
+        Args:
+            window_monitor: WindowMonitor instance for getting window info
+        """
+        self.window_monitor = window_monitor
+        self.events: list = []  # Buffer for current interval
+        self.interval_start_time: Optional[str] = None
+        self._last_window_state: Dict[str, str] = {}
+        
+    def start_interval(self) -> None:
+        """Start tracking for a new screenshot interval."""
+        self.events = []
+        self.interval_start_time = datetime.now().isoformat()
+        # Capture initial window state
+        self._last_window_state = self.window_monitor.get_active_window_info()
+        
+    def poll_window_changes(self) -> None:
+        """Poll for window changes. Call frequently (e.g., every 1-2 seconds)."""
+        current_window = self.window_monitor.get_active_window_info()
+        
+        # Check if window has changed
+        if self._has_window_changed(current_window):
+            self.events.append({
+                'timestamp': datetime.now().isoformat(),
+                'event_type': 'window_change',
+                'from_app': self._last_window_state.get('app_name', ''),
+                'from_title': self._last_window_state.get('title', ''),
+                'to_app': current_window.get('app_name', ''),
+                'to_title': current_window.get('title', ''),
+                'window_title': current_window.get('title', ''),
+                'app_name': current_window.get('app_name', ''),
+                'process_name': current_window.get('process_name', '')
+            })
+            self._last_window_state = current_window.copy()
+            
+    def _has_window_changed(self, current_window: Dict[str, str]) -> bool:
+        """Check if window has changed from last known state.
+        
+        Args:
+            current_window: Current window info dict
+            
+        Returns:
+            True if window/app changed, False otherwise
+        """
+        if not self._last_window_state:
+            return True
+            
+        # Check if app name or window title has changed
+        return (
+            current_window.get('app_name') != self._last_window_state.get('app_name') or
+            current_window.get('title') != self._last_window_state.get('title')
+        )
+        
+    def get_interval_summary(self) -> Dict[str, Any]:
+        """Get summary of all window changes in current interval.
+        
+        Returns:
+            Dict with interval info, total changes, events list, and current window
+        """
+        current_window = self.window_monitor.get_active_window_info()
+        
+        return {
+            'interval_start': self.interval_start_time,
+            'interval_end': datetime.now().isoformat(),
+            'total_changes': len(self.events),
+            'events': self.events.copy(),
+            'current_window': current_window,
+            # Summary for quick access
+            'apps_visited': list(set(e.get('app_name', '') for e in self.events if e.get('app_name'))),
+        }
+        
+    def get_limited_events(self, limit: int = 5) -> list:
+        """Get limited number of most recent events for API payload.
+        
+        Args:
+            limit: Maximum number of events to return
+            
+        Returns:
+            List of recent events (most recent last)
+        """
+        return self.events[-limit:] if self.events else []
 
 
 class ActivityMonitor:

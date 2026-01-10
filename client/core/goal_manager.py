@@ -16,7 +16,16 @@ class AnalysisGoalManager:
     """Manages user-defined analysis goals for AI enrichment."""
 
     PRESET_GOALS = {
-        "productivity": {
+        "time_tracking": {
+            "name": "Time Analysis",
+            "focus": "Time patterns, efficiency, distractions",
+            "questions": [
+                "Where did the time go?",
+                "What were the main activities?",
+                "How focused was the work?"
+            ]
+        },
+        "productivity": {  # Legacy support
             "name": "Productivity Tracking",
             "focus": "Time management, focus patterns, productive vs unproductive activities",
             "questions": [
@@ -25,31 +34,31 @@ class AnalysisGoalManager:
                 "What patterns indicate deep work?"
             ]
         },
-        "learning": {
-            "name": "Learning Documentation",
-            "focus": "Skills learned, resources used, learning progress",
+        "client_work": {
+            "name": "Client Work & Billing",
+            "focus": "Work done for clients, billable hours, detailed logs",
             "questions": [
-                "What new concepts or technologies were explored?",
-                "What documentation or tutorials were referenced?",
-                "What practical application occurred?"
+                "What tasks were completed for clients?",
+                "Are there specific project milestones?",
+                "Summary for daily report?"
             ]
         },
-        "project_tracking": {
+        "learning": {
+            "name": "Learning & Growth",
+            "focus": "Skills learned, resources used, learning progress",
+            "questions": [
+                "What new concepts were explored?",
+                "What resources (docs/videos) were used?",
+                "Key takeaways?"
+            ]
+        },
+        "project_tracking": {  # Legacy/Mapping
             "name": "Project Progress",
             "focus": "Project milestones, code changes, problem-solving steps",
             "questions": [
                 "What project tasks were completed?",
                 "What technical challenges were encountered?",
                 "What solutions or approaches were tried?"
-            ]
-        },
-        "habits": {
-            "name": "Habit Analysis",
-            "focus": "Time allocation, app usage patterns, behavior trends",
-            "questions": [
-                "What time was spent on each app/category?",
-                "What patterns suggest good or bad habits?",
-                "What distractions occurred most frequently?"
             ]
         },
         "custom": {

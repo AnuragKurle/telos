@@ -51,9 +51,19 @@ router.post(
         }
       }
 
-      // Analyze screenshot (pass user email for Portkey logging)
-      const userEmail = req.user.email || req.user.uid;
-      const analysis = await analyzeScreenshot(req.file.buffer, req.file.mimetype, previousCaptures, userEmail);
+      // Parse context metadata if provided (window info, activity metrics)
+      let contextMetadata = {};
+      if (req.body.context_metadata) {
+        try {
+          contextMetadata = JSON.parse(req.body.context_metadata);
+        } catch (e) {
+          console.warn('[Analysis] Failed to parse context_metadata:', e.message);
+        }
+      }
+
+      // Pass user identifier for Portkey logging (email preferred, fallback to UID)
+      const userIdentifier = req.user.email || req.user.uid;
+      const analysis = await analyzeScreenshot(req.file.buffer, req.file.mimetype, previousCaptures, userIdentifier, contextMetadata);
 
       // Return analysis result
       res.status(200).json(analysis);

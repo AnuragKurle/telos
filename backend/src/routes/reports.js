@@ -233,4 +233,35 @@ router.get('/email-preferences', verifyFirebaseToken, async (req, res) => {
     }
 });
 
+/**
+ * POST /v1/reports/trigger-daily-emails
+ * Triggered by Cloud Scheduler hourly to send daily reports
+ * No auth required - protected by Cloud Scheduler service account
+ */
+router.post('/trigger-daily-emails', async (req, res) => {
+    try {
+        console.log('[SCHEDULER] Daily email trigger received');
+
+        // Import email service
+        const { sendDailyReports } = await import('../services/email.js');
+
+        // Run the daily reports job
+        await sendDailyReports();
+
+        console.log('[SCHEDULER] Daily email job completed');
+
+        return res.json({
+            success: true,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('[SCHEDULER] Error in daily email job:', error);
+        return res.status(500).json({
+            error: 'Failed to send daily reports',
+            details: error.message
+        });
+    }
+});
+
 export default router;

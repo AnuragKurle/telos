@@ -7,6 +7,7 @@
 import sgMail from '@sendgrid/mail';
 import { getSecret } from './secrets.js';
 import admin from 'firebase-admin';
+import { generateSummaryFromUsage } from './summaryGenerator.js';
 
 let isInitialized = false;
 
@@ -28,15 +29,49 @@ export async function initializeSendGrid() {
 }
 
 /**
+ * Helper: Format duration
+ */
+function formatDuration(minutes) {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${minutes}m`;
+}
+
+/**
+ * Helper: Get app icon emoji
+ */
+function getAppIcon(appName, category) {
+  const app = (appName || '').toLowerCase();
+  if (app.includes('meet') || app.includes('zoom') || app.includes('teams')) return '📹';
+  if (app.includes('whatsapp') || app.includes('telegram') || app.includes('discord')) return '💬';
+  if (app.includes('slack')) return '💼';
+  if (app.includes('code') || app.includes('vscode')) return '💻';
+  if (app.includes('youtube')) return '📺';
+  if (app.includes('reddit')) return '🔗';
+  if (app.includes('instagram')) return '📷';
+  if (app.includes('linkedin')) return '💼';
+  if (app.includes('airbnb')) return '🏠';
+  if (app.includes('mixpanel')) return '📊';
+  if (category === 'work') return '💼';
+  if (category === 'learning') return '📚';
+  if (category === 'entertainment') return '🎮';
+  return '🌐';
+}
+
+/**
  * Generate HTML email from daily summary data
+ * Uses dark-themed Telos template with Top Apps and Timeline
  */
 function generateReportHTML(summary, userName = 'there') {
-  const date = new Date(summary.date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  // Extract name from email if userName is email-like
+  const displayName = userName.includes('@') ? userName.split('@')[0] : (userName || 'there');
+
+  const dateObj = new Date(summary.date);
+  const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+  const fullDate = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
   const workMin = Math.floor(summary.work_seconds / 60);
   const learningMin = Math.floor(summary.learning_seconds / 60);
@@ -44,121 +79,189 @@ function generateReportHTML(summary, userName = 'there') {
   const entertainmentMin = Math.floor(summary.entertainment_seconds / 60);
   const totalMin = workMin + learningMin + browsingMin + entertainmentMin;
 
-  const score = Math.round(summary.productivity_score || 0);
-  let scoreColor = '#e74c3c';
-  let scoreEmoji = '📊';
-  if (score >= 75) { scoreColor = '#27ae60'; scoreEmoji = '🌟'; }
-  else if (score >= 50) { scoreColor = '#f39c12'; scoreEmoji = '⭐'; }
+  const workPct = Math.round(workMin / Math.max(totalMin, 1) * 100);
+  const browsePct = Math.round(browsingMin / Math.max(totalMin, 1) * 100);
 
-  // Parse key learnings
-  let keyLearnings = [];
-  try {
-    keyLearnings = JSON.parse(summary.key_learnings_json || '[]');
-  } catch (e) {
-    console.error('[EMAIL] Failed to parse key learnings:', e);
-  }
+  const narrative = summary.daily_narrative || 'No summary available for this day.';
+  const apps = summary.apps || [];
+  const timeline = summary.timeline || [];
 
-  const learningsHTML = keyLearnings.length > 0 ? `
-    <div style="margin: 25px 0;">
-      <h2 style="color: #2c3e50; margin-bottom: 15px;">🎓 Key Learnings</h2>
-      <ul style="color: #34495e; line-height: 1.6;">
-        ${keyLearnings.map(l => `<li style="margin: 8px 0;">${l}</li>`).join('')}
-      </ul>
-    </div>
-  ` : '';
-
-  // Generate progress bars
-  const progressBars = [
-    { label: 'Work', minutes: workMin, color: '#3498db' },
-    { label: 'Learning', minutes: learningMin, color: '#9b59b6' },
-    { label: 'Browsing', minutes: browsingMin, color: '#95a5a6' },
-    { label: 'Entertainment', minutes: entertainmentMin, color: '#e67e22' }
-  ].map(({ label, minutes, color }) => {
-    const percentage = totalMin > 0 ? Math.round((minutes / totalMin) * 100) : 0;
+  // Generate Top Apps HTML
+  const topAppsHtml = apps.slice(0, 5).map((app, i) => {
+    const icon = getAppIcon(app.name, app.category);
+    const catColor = { 'work': '#3b82f6', 'learning': '#a855f7', 'browsing': '#6b7280', 'entertainment': '#f59e0b' }[app.category] || '#6b7280';
+    const borderBottom = i < 4 ? 'border-bottom: 1px solid #222222;' : '';
     return `
-      <div style="margin: 15px 0;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-          <span style="color: #2c3e50; font-weight: 500;">${label}</span>
-          <span style="color: #7f8c8d;">${minutes}m (${percentage}%)</span>
-        </div>
-        <div style="background: #ecf0f1; height: 24px; border-radius: 12px; overflow: hidden;">
-          <div style="background: ${color}; height: 100%; width: ${percentage}%;"></div>
-        </div>
-      </div>
-    `;
+                                <tr>
+                                    <td style="padding: 12px 16px; ${borderBottom}" bgcolor="#111111">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td width="30" style="font-size: 16px; color: #ededed;" bgcolor="#111111">${icon}</td>
+                                                <td style="color: #ededed; font-size: 14px;" bgcolor="#111111">${app.name}</td>
+                                                <td width="50" style="text-align: right; font-family: monospace; font-size: 13px; font-weight: 600; color: ${catColor};" bgcolor="#111111">${app.minutes}m</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>`;
   }).join('');
 
+  // Generate Timeline HTML
+  const timelineHtml = timeline.slice(0, 6).map(item => {
+    const catColor = { 'work': '#3b82f6', 'learning': '#a855f7', 'browsing': '#6b7280', 'entertainment': '#f59e0b' }[item.category] || '#6b7280';
+    const icon = getAppIcon(item.app, item.category);
+    const taskText = item.task || 'Activity';
+    return `
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 10px; background-color: #1a1a1a; border-left: 3px solid ${catColor}; border-radius: 0 8px 8px 0;" bgcolor="#1a1a1a">
+                                <tr>
+                                    <td style="padding: 12px 14px;" bgcolor="#1a1a1a">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td width="28" style="font-size: 16px; vertical-align: top;" bgcolor="#1a1a1a">${icon}</td>
+                                                <td style="padding-left: 8px;" bgcolor="#1a1a1a">
+                                                    <div style="font-weight: 600; color: #ededed; font-size: 14px;">${item.app}</div>
+                                                    <div style="font-size: 12px; color: #a3a3a3; margin-top: 2px;">${taskText.substring(0, 50)}${taskText.length > 50 ? '...' : ''}</div>
+                                                </td>
+                                                <td width="50" style="text-align: right; vertical-align: top;" bgcolor="#1a1a1a">
+                                                    <span style="font-family: monospace; font-size: 11px; color: #888888;">${item.start}</span>
+                                                    <div style="font-family: monospace; font-size: 12px; color: #22c55e; margin-top: 2px;">${item.duration_mins}m</div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>`;
+  }).join('');
+
+  // Dark-themed HTML template (email-compatible with table-based layout)
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="color-scheme" content="dark">
+    <meta name="supported-color-schemes" content="dark">
+    <title>Telos Daily Report</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; margin: 0; padding: 0;">
-  <div style="max-width: 600px; margin: 20px auto; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+<body style="margin: 0; padding: 0; background-color: #0a0a0a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;" bgcolor="#0a0a0a">
     
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-      <h1 style="color: white; margin: 0; font-size: 28px;">📊 Daily Activity Report</h1>
-      <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${date}</p>
-    </div>
-    
-    <!-- Productivity Score -->
-    <div style="text-align: center; padding: 30px 20px; background: #f8f9fa; border-bottom: 1px solid #dee2e6;">
-      <div style="font-size: 48px; margin-bottom: 10px;">${scoreEmoji}</div>
-      <div style="font-size: 42px; font-weight: bold; color: ${scoreColor}; margin-bottom: 5px;">
-        ${score}/100
-      </div>
-      <div style="color: #6c757d; font-size: 16px;">Productivity Score</div>
-    </div>
-    
-    <!-- Content -->
-    <div style="padding: 30px;">
-      
-      <!-- Daily Narrative -->
-      <div style="margin-bottom: 25px;">
-        <h2 style="color: #2c3e50; margin-bottom: 15px;">📝 Daily Summary</h2>
-        <p style="color: #34495e; line-height: 1.7; font-size: 15px; background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea;">
-          ${summary.daily_narrative || 'No summary available.'}
-        </p>
-      </div>
-      
-      <!-- Time Breakdown -->
-      <div style="margin: 25px 0;">
-        <h2 style="color: #2c3e50; margin-bottom: 15px;">⏱️ Time Breakdown</h2>
-        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #dee2e6;">
-            <span style="font-size: 32px; font-weight: bold; color: #2c3e50;">${totalMin}</span>
-            <span style="color: #7f8c8d; font-size: 16px; margin-left: 5px;">minutes</span>
-            <div style="color: #6c757d; font-size: 14px; margin-top: 5px;">Total Active Time</div>
-          </div>
-          ${progressBars}
-        </div>
-      </div>
-      
-      ${learningsHTML}
-      
-      <!-- Stats Footer -->
-      <div style="margin-top: 25px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: center;">
-        <div style="color: #6c757d; font-size: 14px;">
-          <strong style="color: #2c3e50;">${summary.context_switches || 0}</strong> context switches
-        </div>
-      </div>
-      
-    </div>
-    
-    <!-- Footer -->
-    <div style="background: #2c3e50; padding: 20px; text-align: center;">
-      <p style="color: rgba(255,255,255,0.7); margin: 0; font-size: 13px;">
-        Generated by Telos Screen Tracker
-      </p>
-      <p style="color: rgba(255,255,255,0.5); margin: 5px 0 0 0; font-size: 12px;">
-        AI-powered activity insights
-      </p>
-    </div>
-    
-  </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #0a0a0a;" bgcolor="#0a0a0a">
+        <tr>
+            <td align="center" style="padding: 20px 10px;" bgcolor="#0a0a0a">
+                
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 600px; background-color: #0a0a0a;" bgcolor="#0a0a0a">
+                    
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                ${dayName}, ${fullDate}
+                            </p>
+                            <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #ededed;">
+                                Here's your <span style="color: #22c55e;">${dayName}</span>, ${displayName}
+                            </h1>
+                        </td>
+                    </tr>
+                    
+                    <!-- Summary Box -->
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 8px; border-left: 3px solid #22c55e;" bgcolor="#111111">
+                                <tr>
+                                    <td style="padding: 16px; color: #d4d4d4; font-size: 14px; line-height: 1.6;" bgcolor="#111111">
+                                        ${narrative.substring(0, 280)}${narrative.length > 280 ? '...' : ''}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Metrics Row 1 -->
+                    <tr>
+                        <td style="padding: 0 16px 10px;" bgcolor="#0a0a0a">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #22c55e;">
+                                            ${formatDuration(totalMin)}
+                                        </div>
+                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Total Tracked</div>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #3b82f6;">
+                                            ${formatDuration(workMin)}
+                                        </div>
+                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Work</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Metrics Row 2 -->
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #f59e0b;">
+                                            ${browsePct}%
+                                        </div>
+                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Browsing</div>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #a855f7;">
+                                            ${formatDuration(learningMin)}
+                                        </div>
+                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Learning</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Top Apps Section -->
+                    ${apps.length > 0 ? `
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                Top Apps
+                            </p>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                ${topAppsHtml}
+                            </table>
+                        </td>
+                    </tr>
+                    ` : ''}
+                    
+                    <!-- Timeline Section -->
+                    ${timeline.length > 0 ? `
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                Your Day
+                            </p>
+                            ${timelineHtml}
+                        </td>
+                    </tr>
+                    ` : ''}
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 20px 16px; border-top: 1px solid #262626; text-align: center;" bgcolor="#0a0a0a">
+                            <p style="margin: 0; font-family: monospace; font-size: 12px; color: #525252;">
+                                <span style="color: #22c55e;">telos</span> daily report
+                            </p>
+                        </td>
+                    </tr>
+                    
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
   `;
@@ -285,34 +388,66 @@ export async function sendDailyReports() {
           yesterday.setDate(yesterday.getDate() - 1);
           const dateStr = yesterday.toISOString().split('T')[0];
 
-          const summarySnapshot = await db.collection('daily_summaries')
+          let summarySnapshot = await db.collection('daily_summaries')
             .where('userEmail', '==', userEmail)
             .where('date', '==', dateStr)
-            .where('emailSent', '==', false)
             .limit(1)
             .get();
 
-          if (!summarySnapshot.empty) {
-            const summaryDoc = summarySnapshot.docs[0];
-            const summaryData = summaryDoc.data();
+          let summaryData;
+          let summaryRef = null;
 
-            // Send email
-            const result = await sendDailyReport(userEmail, summaryData.summary);
+          if (summarySnapshot.empty) {
+            // No summary exists - try to generate one from usage data
+            console.log(`[EMAIL] No summary found for ${userEmail} on ${dateStr}, attempting to generate...`);
 
-            if (result.success) {
-              // Mark as sent
-              await summaryDoc.ref.update({
-                emailSent: true,
-                emailSentAt: admin.firestore.FieldValue.serverTimestamp()
-              });
-              sentCount++;
-              console.log(`[EMAIL] ✓ Sent report to ${userEmail}`);
-            } else {
-              errorCount++;
-              console.error(`[EMAIL] ✗ Failed to send to ${userEmail}`);
+            const generated = await generateSummaryFromUsage(userEmail, user.uid, dateStr);
+
+            if (!generated) {
+              console.log(`[EMAIL] Could not generate summary for ${userEmail} - no usage data for ${dateStr}`);
+              continue; // Skip this user
             }
+
+            // Save generated summary to Firestore
+            const newSummary = {
+              userId: user.uid,
+              userEmail: userEmail,
+              date: dateStr,
+              uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+              emailSent: false,
+              summary: generated
+            };
+
+            summaryRef = await db.collection('daily_summaries').add(newSummary);
+            summaryData = generated;
+
+            console.log(`[EMAIL] ✓ Generated and saved summary for ${userEmail}`);
+
           } else {
-            console.log(`[EMAIL] No unsent summary for ${userEmail} on ${dateStr}`);
+            // Summary exists - check if already sent
+            const doc = summarySnapshot.docs[0];
+            if (doc.data().emailSent) {
+              console.log(`[EMAIL] Summary already sent to ${userEmail} for ${dateStr}`);
+              continue;
+            }
+            summaryData = doc.data().summary;
+            summaryRef = doc.ref;
+          }
+
+          // Send email
+          const result = await sendDailyReport(userEmail, summaryData);
+
+          if (result.success) {
+            // Mark as sent
+            await summaryRef.update({
+              emailSent: true,
+              emailSentAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            sentCount++;
+            console.log(`[EMAIL] ✓ Sent report to ${userEmail}`);
+          } else {
+            errorCount++;
+            console.error(`[EMAIL] ✗ Failed to send to ${userEmail}`);
           }
         } catch (error) {
           errorCount++;
