@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-01-10
+
+### Added
+- **Privacy Policy**: New privacy policy page on website covering data ownership, local storage, and no third-party tracking
+- **Email Reports**: Enhanced daily email reports with dark theme logic and improved data visualization
+- **Client Setup**: New personal setup and welcome carousel screens for better onboarding
+- **Migration**: Firestore migration script for database updates
+
+### Changed
+- Refactored dashboard and current activity widgets
+- Improved authentication flow with better email handling
+- Updated website with privacy policy link
+
+## [0.1.6] - 2026-01-03
+- Minor updates and bug fixes
+
 ## [0.1.5] - 2026-01-03
 
 ### Fixed
