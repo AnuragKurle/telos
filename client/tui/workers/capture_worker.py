@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.database import Database
 from core.analyzer import GeminiAnalyzer, RateLimitError
-from core.capture import ActivityMonitor, ScreenshotCapture
+from core.capture import ActivityMonitor, ScreenshotCapture, WindowMonitor
 from core.backend_client import BackendClient, BackendError
 from core.fallback_handler import FallbackHandler, FallbackMode
 from utils.hash_utils import ScreenshotHasher
@@ -36,6 +36,7 @@ async def capture_worker_task(app):
     capturer = ScreenshotCapture(quality)
     hasher = ScreenshotHasher()
     activity_monitor = ActivityMonitor(idle_timeout)
+    window_monitor = WindowMonitor()  # For gathering window context metadata
     
     # Initialize Phase 2 components (backend integration)
     backend_client = None
@@ -107,6 +108,18 @@ async def capture_worker_task(app):
             # Get previous 2 captures for context (Phase 5)
             previous_captures = await asyncio.to_thread(db.get_previous_captures, 2)
 
+            # Gather context metadata for Portkey logging
+            window_info = await asyncio.to_thread(window_monitor.get_active_window_info)
+            activity_metrics = activity_monitor.get_and_reset_metrics()
+            
+            context_metadata = {
+                'window_title': window_info.get('title', ''),
+                'app_name': window_info.get('app_name', ''),
+                'keystrokes': activity_metrics.get('keystrokes', 0),
+                'mouse_clicks': activity_metrics.get('mouse_clicks', 0),
+                'mouse_distance': activity_metrics.get('mouse_distance', 0),
+            }
+
             # Analyze with backend or local Gemini (Phase 2)
             try:
                 if fallback_handler:
@@ -114,14 +127,16 @@ async def capture_worker_task(app):
                     result = await asyncio.to_thread(
                         fallback_handler.analyze_screenshot,
                         screenshot_path,
-                        previous_captures
+                        previous_captures,
+                        context_metadata
                     )
                 else:
                     # Use local Gemini only
                     result = await asyncio.to_thread(
                         analyzer.analyze_with_fallback,
                         screenshot_path,
-                        previous_captures
+                        previous_captures,
+                        context_metadata
                     )
 
                 if result and result.get('confidence', 0) > 0:
