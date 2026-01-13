@@ -41,6 +41,65 @@ function formatDuration(minutes) {
 }
 
 /**
+ * Generate insights and recommendations section
+ */
+function generateInsightsHTML(summary, workMin, totalMin, weeklyComp, focusQuality, deepWork) {
+  const insights = [];
+
+  // Deep work insight
+  if (deepWork.length > 0) {
+    const totalDeepWork = deepWork.reduce((sum, s) => sum + s.duration_mins, 0);
+    insights.push(`⚡ You had ${deepWork.length} deep work session${deepWork.length > 1 ? 's' : ''} totaling ${totalDeepWork} minutes of sustained focus.`);
+  } else if (workMin > 10) {
+    insights.push(`💡 No deep work sessions detected. Try blocking 15+ minutes for focused work without switching apps.`);
+  }
+
+  // Weekly comparison insight
+  if (weeklyComp.has_history) {
+    if (weeklyComp.work_diff > 0) {
+      insights.push(`📈 ${weeklyComp.work_diff}m more work time than your ${weeklyComp.days_compared}-day average (${weeklyComp.avg_work}m).`);
+    } else if (weeklyComp.work_diff < -10) {
+      insights.push(`📉 ${Math.abs(weeklyComp.work_diff)}m less work time than usual. Your ${weeklyComp.days_compared}-day average is ${weeklyComp.avg_work}m.`);
+    }
+  }
+
+  // Focus quality insight
+  if (focusQuality.focus_quality_score) {
+    if (focusQuality.focus_quality_score >= 70) {
+      insights.push(`✨ Strong focus quality (${focusQuality.focus_quality_score}/100). Average session: ${focusQuality.avg_session_length}min.`);
+    } else if (focusQuality.fragmentation_ratio > 50) {
+      insights.push(`🔀 High fragmentation (${focusQuality.fragmentation_ratio}% short sessions). Try longer focused blocks.`);
+    }
+  }
+
+  // Context switching insight
+  if (summary.context_switches > 50) {
+    insights.push(`⚠️ ${summary.context_switches} context switches detected. Frequent app switching may reduce productivity.`);
+  }
+
+  // Distraction insight
+  if (focusQuality.distraction_minutes > 30) {
+    insights.push(`🎯 ${focusQuality.distraction_minutes}m spent on potential distractions. Consider blocking distraction time.`);
+  }
+
+  // Productive ratio insight
+  const productiveMin = workMin + Math.floor(summary.learning_seconds / 60);
+  const productiveRatio = Math.round(productiveMin / Math.max(totalMin, 1) * 100);
+  if (productiveRatio >= 60) {
+    insights.push(`🎯 ${productiveRatio}% of your time was spent on productive activities.`);
+  }
+
+  if (insights.length === 0) {
+    insights.push('Keep tracking your activity to build insights over time.');
+  }
+
+  return insights.map(insight => `
+                                        <div style="padding: 10px 14px; margin-bottom: 8px; background-color: #1a1a1a; border-left: 3px solid #22c55e; border-radius: 0 6px 6px 0; color: #d4d4d4; font-size: 13px; line-height: 1.5;">
+                                            ${insight}
+                                        </div>`).join('');
+}
+
+/**
  * Helper: Get app icon emoji
  */
 function getAppIcon(appName, category) {
@@ -67,7 +126,8 @@ function getAppIcon(appName, category) {
  */
 function generateReportHTML(summary, userName = 'there') {
   // Extract name from email if userName is email-like
-  const displayName = userName.includes('@') ? userName.split('@')[0] : (userName || 'there');
+  const safeName = userName || 'there';
+  const displayName = safeName.includes('@') ? safeName.split('@')[0] : safeName;
 
   const dateObj = new Date(summary.date);
   const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
@@ -80,11 +140,19 @@ function generateReportHTML(summary, userName = 'there') {
   const totalMin = workMin + learningMin + browsingMin + entertainmentMin;
 
   const workPct = Math.round(workMin / Math.max(totalMin, 1) * 100);
+  const learningPct = Math.round(learningMin / Math.max(totalMin, 1) * 100);
   const browsePct = Math.round(browsingMin / Math.max(totalMin, 1) * 100);
+  const entertainmentPct = Math.round(entertainmentMin / Math.max(totalMin, 1) * 100);
 
   const narrative = summary.daily_narrative || 'No summary available for this day.';
   const apps = summary.apps || [];
   const timeline = summary.timeline || [];
+
+  // Enhanced analytics
+  const deepWork = summary.deep_work_sessions || [];
+  const focusQuality = summary.focus_quality || {};
+  const weeklyComp = summary.weekly_comparison || {};
+  const peakHour = summary.peak_productivity_hour || 0;
 
   // Generate Top Apps HTML
   const topAppsHtml = apps.slice(0, 5).map((app, i) => {
@@ -105,32 +173,46 @@ function generateReportHTML(summary, userName = 'there') {
                                 </tr>`;
   }).join('');
 
-  // Generate Timeline HTML
-  const timelineHtml = timeline.slice(0, 6).map(item => {
-    const catColor = { 'work': '#3b82f6', 'learning': '#a855f7', 'browsing': '#6b7280', 'entertainment': '#f59e0b' }[item.category] || '#6b7280';
-    const icon = getAppIcon(item.app, item.category);
-    const taskText = item.task || 'Activity';
-    return `
+  // Generate Timeline HTML - show top activities by duration
+  const timelineHtml = timeline
+    .filter(item => item.duration_mins >= 1)  // Only show >= 1 minute
+    .slice(0, 8)  // Show top 8 activities
+    .map(item => {
+      const catColor = { 'work': '#3b82f6', 'learning': '#a855f7', 'browsing': '#6b7280', 'entertainment': '#f59e0b' }[item.category] || '#6b7280';
+      const icon = getAppIcon(item.app, item.category);
+      const taskText = item.task || 'Activity';
+
+      // Format duration in a more readable way
+      let durationDisplay = `${item.duration_mins}m`;
+      if (item.duration_mins >= 60) {
+        const hours = Math.floor(item.duration_mins / 60);
+        const mins = item.duration_mins % 60;
+        durationDisplay = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+      }
+
+      return `
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 10px; background-color: #1a1a1a; border-left: 3px solid ${catColor}; border-radius: 0 8px 8px 0;" bgcolor="#1a1a1a">
                                 <tr>
-                                    <td style="padding: 12px 14px;" bgcolor="#1a1a1a">
+                                    <td style="padding: 14px 16px;" bgcolor="#1a1a1a">
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                                             <tr>
-                                                <td width="28" style="font-size: 16px; vertical-align: top;" bgcolor="#1a1a1a">${icon}</td>
-                                                <td style="padding-left: 8px;" bgcolor="#1a1a1a">
-                                                    <div style="font-weight: 600; color: #ededed; font-size: 14px;">${item.app}</div>
-                                                    <div style="font-size: 12px; color: #a3a3a3; margin-top: 2px;">${taskText.substring(0, 50)}${taskText.length > 50 ? '...' : ''}</div>
+                                                <td width="32" style="font-size: 18px; vertical-align: top;" bgcolor="#1a1a1a">${icon}</td>
+                                                <td style="padding-left: 10px;" bgcolor="#1a1a1a">
+                                                    <div style="font-weight: 600; color: #ededed; font-size: 15px;">${item.app}</div>
+                                                    <div style="font-size: 13px; color: #a3a3a3; margin-top: 3px; line-height: 1.4;">${taskText.substring(0, 70)}${taskText.length > 70 ? '...' : ''}</div>
                                                 </td>
-                                                <td width="50" style="text-align: right; vertical-align: top;" bgcolor="#1a1a1a">
-                                                    <span style="font-family: monospace; font-size: 11px; color: #888888;">${item.start}</span>
-                                                    <div style="font-family: monospace; font-size: 12px; color: #22c55e; margin-top: 2px;">${item.duration_mins}m</div>
+                                                <td width="60" style="text-align: right; vertical-align: top;" bgcolor="#1a1a1a">
+                                                    <div style="font-family: monospace; font-size: 16px; font-weight: 600; color: ${catColor};">${durationDisplay}</div>
                                                 </td>
                                             </tr>
                                         </table>
                                     </td>
                                 </tr>
                             </table>`;
-  }).join('');
+    }).join('');
+
+  // Generate Insights HTML
+  const insightsHtml = generateInsightsHTML(summary, workMin, totalMin, weeklyComp, focusQuality, deepWork);
 
   // Dark-themed HTML template (email-compatible with table-based layout)
   return `
@@ -237,18 +319,95 @@ function generateReportHTML(summary, userName = 'there') {
                     </tr>
                     ` : ''}
                     
-                    <!-- Timeline Section -->
+                    <!-- Top Activities Section -->
                     ${timeline.length > 0 ? `
                     <tr>
                         <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
-                                Your Day
+                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                Top Activities
+                            </p>
+                            <p style="margin: 0 0 12px 0; font-size: 12px; color: #737373;">
+                                Your most significant activities, aggregated by app
                             </p>
                             ${timelineHtml}
                         </td>
                     </tr>
                     ` : ''}
-                    
+
+                    <!-- Insights & Analytics Section -->
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                💡 Insights & Recommendations
+                            </p>
+                            <p style="margin: 0 0 12px 0; font-size: 12px; color: #737373;">
+                                Personalized insights from your activity patterns
+                            </p>
+                            ${insightsHtml}
+                        </td>
+                    </tr>
+
+                    <!-- Focus & Context Section -->
+                    ${focusQuality && focusQuality.avg_session_length ? `
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                📊 Focus Metrics
+                            </p>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                <tr>
+                                    <td style="padding: 14px 18px; border-bottom: 1px solid #222222;" bgcolor="#111111">
+                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 4px;">Avg Session Length</div>
+                                        <div style="font-size: 18px; font-weight: 600; color: #ededed;">${focusQuality.avg_session_length}m</div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 14px 18px; border-bottom: 1px solid #222222;" bgcolor="#111111">
+                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 4px;">Context Switches</div>
+                                        <div style="font-size: 18px; font-weight: 600; color: ${summary.context_switches > 50 ? '#f59e0b' : '#22c55e'};">${summary.context_switches}</div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 14px 18px;" bgcolor="#111111">
+                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 4px;">Focus Quality</div>
+                                        <div style="font-size: 18px; font-weight: 600; color: ${focusQuality.focus_quality_score >= 70 ? '#22c55e' : focusQuality.focus_quality_score >= 40 ? '#f59e0b' : '#ef4444'};">${focusQuality.focus_quality_score}/100</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    ` : ''}
+
+                    <!-- Weekly Comparison Section -->
+                    ${weeklyComp && weeklyComp.has_history ? `
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                📈 Weekly Trends (${weeklyComp.days_compared}-Day Avg)
+                            </p>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-size: 11px; color: #888888; margin-bottom: 6px;">WORK TIME</div>
+                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #3b82f6;">${weeklyComp.current_work}m</div>
+                                        <div style="font-size: 12px; color: ${weeklyComp.work_diff >= 0 ? '#22c55e' : '#ef4444'}; margin-top: 4px;">
+                                            ${weeklyComp.work_diff >= 0 ? '▲' : '▼'} ${Math.abs(weeklyComp.work_diff)}m vs avg (${weeklyComp.avg_work}m)
+                                        </div>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-size: 11px; color: #888888; margin-bottom: 6px;">TOTAL TIME</div>
+                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #22c55e;">${weeklyComp.current_total}m</div>
+                                        <div style="font-size: 12px; color: ${weeklyComp.total_diff >= 0 ? '#22c55e' : '#ef4444'}; margin-top: 4px;">
+                                            ${weeklyComp.total_diff >= 0 ? '▲' : '▼'} ${Math.abs(weeklyComp.total_diff)}m vs avg (${weeklyComp.avg_total}m)
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    ` : ''}
+
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 20px 16px; border-top: 1px solid #262626; text-align: center;" bgcolor="#0a0a0a">
@@ -354,8 +513,12 @@ export async function sendDailyReport(userEmail, summary, userName = null) {
  * Send daily reports to all users who have email enabled
  * Called by scheduler every hour
  */
-export async function sendDailyReports() {
-  console.log('[EMAIL] Checking for reports to send...');
+export async function sendDailyReports(force = false) {
+  console.log(`\n========================================`);
+  console.log(`[EMAIL] Starting daily report check`);
+  console.log(`[EMAIL] Time: ${new Date().toISOString()} (UTC Hour: ${new Date().getUTCHours()})`);
+  console.log(`[EMAIL] Force mode: ${force}`);
+  console.log(`========================================\n`);
 
   const db = admin.firestore();
   const now = new Date();
@@ -372,8 +535,10 @@ export async function sendDailyReports() {
       return;
     }
 
+    console.log(`[EMAIL] Found ${usersSnapshot.size} users with email reports enabled`);
     let sentCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
 
     for (const userDoc of usersSnapshot.docs) {
       const user = userDoc.data();
@@ -381,12 +546,19 @@ export async function sendDailyReports() {
       const prefs = user.emailReports || {};
 
       // Check if it's time to send for this user based on their timezone
-      if (shouldSendEmail(prefs, currentHour)) {
+      // OR if we are forcing delivery
+      const shouldSend = force || shouldSendEmail(prefs, currentHour);
+      console.log(`[EMAIL] User: ${userEmail}`);
+      console.log(`[EMAIL]   Timezone: ${prefs.timezone || 'UTC'}, Preferred Hour: ${prefs.preferredHour || prefs.sendTime || 9}`);
+      console.log(`[EMAIL]   Should send now: ${shouldSend}`);
+
+      if (shouldSend) {
         try {
-          // Get yesterday's summary
+          // Get yesterday's summary (or fall back to most recent data)
           const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
-          const dateStr = yesterday.toISOString().split('T')[0];
+          let dateStr = yesterday.toISOString().split('T')[0];
+          const originalDateStr = dateStr; // Track what we originally wanted
 
           let summarySnapshot = await db.collection('daily_summaries')
             .where('userEmail', '==', userEmail)
@@ -401,11 +573,36 @@ export async function sendDailyReports() {
             // No summary exists - try to generate one from usage data
             console.log(`[EMAIL] No summary found for ${userEmail} on ${dateStr}, attempting to generate...`);
 
-            const generated = await generateSummaryFromUsage(userEmail, user.uid, dateStr);
+            let generated = await generateSummaryFromUsage(userEmail, user.uid, dateStr);
 
             if (!generated) {
-              console.log(`[EMAIL] Could not generate summary for ${userEmail} - no usage data for ${dateStr}`);
-              continue; // Skip this user
+              console.log(`[EMAIL] No usage data for ${dateStr}. Checking for most recent activity...`);
+
+              // Fall back: Look for the most recent date with data (within last 3 days only)
+              const usageDoc = await db.collection('usage').doc(user.uid).get();
+              if (usageDoc.exists) {
+                const dayBucket = usageDoc.data().dayBucket || {};
+                const availableDates = Object.keys(dayBucket).sort().reverse();
+
+                // Find most recent date within last 3 days (not 7, to avoid very stale data)
+                const threeDaysAgo = new Date(now);
+                threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+                const cutoffDate = threeDaysAgo.toISOString().split('T')[0];
+
+                const recentDate = availableDates.find(d => d >= cutoffDate);
+
+                if (recentDate && recentDate !== dateStr) {
+                  console.log(`[EMAIL] ⚠️  Found recent data for ${recentDate}, generating catch-up email...`);
+                  generated = await generateSummaryFromUsage(userEmail, user.uid, recentDate);
+                  dateStr = recentDate; // Update dateStr to the date we're actually using
+                }
+              }
+
+              if (!generated) {
+                console.log(`[EMAIL] ⊘ Skipping ${userEmail} - no recent usage data (last 3 days)`);
+                skippedCount++;
+                continue; // Skip this user
+              }
             }
 
             // Save generated summary to Firestore
@@ -427,11 +624,20 @@ export async function sendDailyReports() {
             // Summary exists - check if already sent
             const doc = summarySnapshot.docs[0];
             if (doc.data().emailSent) {
-              console.log(`[EMAIL] Summary already sent to ${userEmail} for ${dateStr}`);
+              console.log(`[EMAIL] ⊘ Summary already sent to ${userEmail} for ${dateStr}`);
+              skippedCount++;
               continue;
             }
             summaryData = doc.data().summary;
             summaryRef = doc.ref;
+          }
+
+          // Check data freshness and warn user if data is old
+          const dataAge = Math.floor((new Date(originalDateStr) - new Date(dateStr)) / (1000 * 60 * 60 * 24));
+          if (dataAge > 0) {
+            console.log(`[EMAIL] ⚠️  Data for ${userEmail} is ${dataAge} day(s) old (${dateStr} vs ${originalDateStr})`);
+            // Add a warning to the summary
+            summaryData.daily_narrative = `⚠️ Note: This report uses data from ${dateStr} (${dataAge} day${dataAge > 1 ? 's' : ''} old). Recent data not available.\n\n` + summaryData.daily_narrative;
           }
 
           // Send email
@@ -444,7 +650,7 @@ export async function sendDailyReports() {
               emailSentAt: admin.firestore.FieldValue.serverTimestamp()
             });
             sentCount++;
-            console.log(`[EMAIL] ✓ Sent report to ${userEmail}`);
+            console.log(`[EMAIL] ✓ Sent report to ${userEmail}${dataAge > 0 ? ` (data age: ${dataAge}d)` : ''}`);
           } else {
             errorCount++;
             console.error(`[EMAIL] ✗ Failed to send to ${userEmail}`);
@@ -453,10 +659,17 @@ export async function sendDailyReports() {
           errorCount++;
           console.error(`[EMAIL] Error sending to ${userEmail}:`, error);
         }
+      } else {
+        skippedCount++;
       }
     }
 
-    console.log(`[EMAIL] Batch complete: ${sentCount} sent, ${errorCount} errors`);
+    console.log(`\n[EMAIL] ========================================`);
+    console.log(`[EMAIL] Batch complete:`);
+    console.log(`[EMAIL]   ✓ Sent: ${sentCount}`);
+    console.log(`[EMAIL]   ✗ Errors: ${errorCount}`);
+    console.log(`[EMAIL]   ⊘ Skipped (timing): ${skippedCount}`);
+    console.log(`[EMAIL] ========================================\n`);
 
   } catch (error) {
     console.error('[EMAIL] Error in sendDailyReports:', error);
@@ -465,18 +678,27 @@ export async function sendDailyReports() {
 
 /**
  * Check if we should send email to user based on timezone
+ *
+ * Algorithm: Convert preferred local time to UTC, then check if current UTC time matches
+ * within a 1-hour window. This ensures emails are sent once per day around the preferred time.
+ *
+ * The emailSent flag in sendDailyReports prevents duplicates.
  */
 function shouldSendEmail(prefs, currentUTCHour) {
   const timezone = prefs.timezone || 'UTC';
 
   // Support both preferredHour (number) and sendTime (string) formats
-  let sendHour;
+  let preferredLocalHour;
+  let preferredLocalMinute = 0;
+
   if (typeof prefs.preferredHour === 'number') {
-    sendHour = prefs.preferredHour;
+    preferredLocalHour = prefs.preferredHour;
   } else if (prefs.sendTime) {
-    sendHour = parseInt(prefs.sendTime.split(':')[0], 10);
+    const parts = prefs.sendTime.split(':');
+    preferredLocalHour = parseInt(parts[0], 10);
+    preferredLocalMinute = parseInt(parts[1] || '0', 10);
   } else {
-    sendHour = 9; // Default to 9 AM
+    preferredLocalHour = 9; // Default to 9 AM
   }
 
   // Get timezone offset (simple approach - use full timezone library for production)
@@ -484,24 +706,49 @@ function shouldSendEmail(prefs, currentUTCHour) {
     'UTC': 0,
     'America/New_York': -5,
     'America/Los_Angeles': -8,
+    'America/Chicago': -6,
+    'America/Denver': -7,
     'Europe/London': 0,
     'Europe/Paris': 1,
+    'Europe/Berlin': 1,
     'Asia/Kolkata': 5.5,
     'Asia/Tokyo': 9,
+    'Asia/Shanghai': 8,
     'Australia/Sydney': 11,
     // Add more as needed
   };
 
   const offset = timezoneOffsets[timezone] || 0;
 
-  // Convert user's preferred local hour to UTC
-  // If user wants 21:00 IST (offset +5.5), that's 15:30 UTC
-  const targetUTCHour = (sendHour - offset + 24) % 24;
+  // Convert preferred local time to UTC
+  // Example: 21:00 IST (UTC+5:30) -> 21 - 5.5 = 15.5 UTC
+  let targetUTCHour = preferredLocalHour - offset;
 
-  // Check if current UTC hour matches (accounting for half-hour offsets)
-  const hourMatches = Math.floor(targetUTCHour) === currentUTCHour;
+  // Handle wrapping
+  if (targetUTCHour < 0) targetUTCHour += 24;
+  if (targetUTCHour >= 24) targetUTCHour -= 24;
 
-  console.log(`[EMAIL] Time check for ${timezone}: preferredHour=${sendHour}, targetUTC=${targetUTCHour.toFixed(1)}, currentUTC=${currentUTCHour}, match=${hourMatches}`);
+  // Create a 2-hour window to account for scheduler frequency (runs every 30 min)
+  // and potential delays. This ensures we catch the send time even if scheduler
+  // misses the exact hour.
+  const targetUTCHourLower = Math.floor(targetUTCHour);
+  const targetUTCHourUpper = Math.ceil(targetUTCHour) + 1; // +1 hour buffer
 
-  return hourMatches;
+  // Check if current hour is within the target window
+  let shouldSend = false;
+
+  if (targetUTCHourLower <= targetUTCHourUpper) {
+    // Normal case: window doesn't wrap around midnight
+    shouldSend = currentUTCHour >= targetUTCHourLower && currentUTCHour <= targetUTCHourUpper;
+  } else {
+    // Edge case: window wraps around midnight (e.g., 23-1)
+    shouldSend = currentUTCHour >= targetUTCHourLower || currentUTCHour <= targetUTCHourUpper;
+  }
+
+  // Logging for debugging
+  console.log(`[EMAIL] Timezone: ${timezone}, Preferred: ${preferredLocalHour}:${preferredLocalMinute < 10 ? '0' : ''}${preferredLocalMinute} (${prefs.sendTime || preferredLocalHour})`);
+  console.log(`[EMAIL]   Offset: ${offset}, Target UTC: ${targetUTCHour.toFixed(1)} (window: ${targetUTCHourLower}-${targetUTCHourUpper})`);
+  console.log(`[EMAIL]   Current UTC: ${currentUTCHour}, Should send: ${shouldSend}`);
+
+  return shouldSend;
 }

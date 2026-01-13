@@ -78,12 +78,15 @@ let intervalId = null;
 export function startScheduler() {
     if (intervalId) return;
 
-    // Run immediately on startup for testing/safety
-    runDailyJobs();
+    // Run immediately on startup (with slight delay) to catch up on missed jobs
+    setTimeout(() => {
+        console.log('[SCHEDULER] Running startup job check...');
+        runDailyJobs();
+    }, 60000); // 1 minute delay
 
-    // Run every hour to check for emails to send (timezone-aware)
-    const HOUR_MS = 60 * 60 * 1000;
-    intervalId = setInterval(runDailyJobs, HOUR_MS);
+    // Run every 30 minutes to better handle half-hour timezone offsets (e.g. India +5:30)
+    const THIRTY_MIN_MS = 30 * 60 * 1000;
+    intervalId = setInterval(runDailyJobs, THIRTY_MIN_MS);
 
-    console.log('[SCHEDULER] Started hourly job runner');
+    console.log('[SCHEDULER] Started 30-minute job runner');
 }
