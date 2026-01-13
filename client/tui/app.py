@@ -107,6 +107,7 @@ class TelosApp(App):
         self.db_worker = None
         self.session_worker = None
         self.email_worker_task = None
+        self.firestore_sync_worker_task = None
         
         # Trial manager
         self.trial_manager = TrialManager(config, trial_duration_days=7)
@@ -120,10 +121,33 @@ class TelosApp(App):
         # Push the Dashboard screen
         self.push_screen(DashboardScreen())
         
+        # Sync account status from backend (non-blocking, best effort)
+        backend_enabled = self.config.get('backend', 'enabled', default=False)
+        if backend_enabled:
+            try:
+                backend_url = self.config.get('backend', 'url')
+                firebase_api_key = self.config.get('firebase', 'api_key')
+                if backend_url and firebase_api_key:
+                    self.trial_manager.refresh_account_status(backend_url, firebase_api_key)
+            except Exception as e:
+                print(f"[APP] Failed to sync account status: {e}")
+        
+        # Check if trial is expired - enforce restrictions
+        is_expired = self.trial_manager.is_trial_expired()
+        
         # Check for upgrade prompts
         prompt_type = self.trial_manager.should_show_upgrade_prompt()
-        if prompt_type:
+        if prompt_type or is_expired:
             self.set_timer(2, lambda: self.push_screen(UpgradeScreen(self.trial_manager)))
+
+        # Only start workers if trial is active or user is Pro
+        if is_expired:
+            self.notify(
+                "Trial expired. Tracking disabled. Upgrade to continue.",
+                severity="warning",
+                timeout=10
+            )
+            return  # Don't start workers
 
         # Start background workers
         self.capture_worker = asyncio.create_task(capture_worker_task(self))
@@ -165,6 +189,28 @@ class TelosApp(App):
             )
             self.email_worker_task = asyncio.create_task(email_worker.start())
 
+        # Start Firestore sync worker if backend is enabled
+        if backend_enabled:
+            from core.firestore_sync import FirestoreSync
+            from core.database import Database
+            from core.firebase_auth import FirebaseAuth
+
+            # Initialize components for Firestore sync
+            db = Database(self.config.get('storage', 'database_path'))
+            firebase_api_key = self.config.get('firebase', 'api_key')
+            firebase_project_id = self.config.get('firebase', 'project_id', default='gen-lang-client-0772617718')
+
+            firebase_auth = FirebaseAuth(firebase_api_key)
+
+            firestore_sync = FirestoreSync(
+                db=db,
+                firebase_auth=firebase_auth,
+                firebase_project_id=firebase_project_id,
+                sync_interval_hours=24  # Sync once per day
+            )
+            self.firestore_sync_worker_task = asyncio.create_task(firestore_sync.start())
+            print("[APP] Firestore sync worker started")
+
     async def on_unmount(self) -> None:
         """Called when app is being unmounted (shutdown)."""
         self.shutting_down = True
@@ -195,6 +241,13 @@ class TelosApp(App):
             self.email_worker_task.cancel()
             try:
                 await self.email_worker_task
+            except asyncio.CancelledError:
+                pass
+
+        if self.firestore_sync_worker_task and not self.firestore_sync_worker_task.done():
+            self.firestore_sync_worker_task.cancel()
+            try:
+                await self.firestore_sync_worker_task
             except asyncio.CancelledError:
                 pass
 

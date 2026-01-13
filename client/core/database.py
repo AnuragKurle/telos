@@ -275,8 +275,16 @@ class Database:
             ''', (start_of_day, end_of_day))
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_captures_for_date(self, date: datetime) -> List[Dict[str, Any]]:
-        """Get all captures for a specific date."""
+    def get_captures_for_date(self, date) -> List[Dict[str, Any]]:
+        """Get all captures for a specific date.
+
+        Args:
+            date: Either a datetime object or string in YYYY-MM-DD format
+        """
+        # Handle both datetime and string inputs
+        if isinstance(date, str):
+            date = datetime.strptime(date, '%Y-%m-%d')
+
         start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
         end_of_day = start_of_day + timedelta(days=1)
 
