@@ -242,10 +242,15 @@ class EmailSettingsModal(ModalScreen[bool]):
             send_time = self.query_one("#send-time-select", Select).value
             timezone = self.query_one("#timezone-select", Select).value
 
-            # Save to local config
-            self.config.set('email', 'enabled', enabled)
-            self.config.set('email', 'send_time', send_time)
-            self.config.set('email', 'timezone', timezone)
+            # Save to local config - modify the config dict directly
+            if 'email' not in self.config.config:
+                self.config.config['email'] = {}
+            self.config.config['email']['enabled'] = enabled
+            self.config.config['email']['send_time'] = send_time
+            self.config.config['email']['timezone'] = timezone
+
+            # Save to file
+            self.config.save(self.config.config)
 
             # Sync with backend asynchronously
             self.run_worker(
