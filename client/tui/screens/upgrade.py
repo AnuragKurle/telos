@@ -144,14 +144,41 @@ class UpgradeScreen(Screen):
     
     def action_upgrade(self) -> None:
         """Open upgrade URL in browser."""
-        # TODO: Replace with actual upgrade URL
-        upgrade_url = "https://telos.app/upgrade"
+        # Call backend to create Stripe Checkout session
+        config = self.app.config
+        backend_url = config.get('backend', 'url')
+        
+        if not backend_url:
+            self.app.notify("Backend not configured. Cannot process upgrade.", severity="error")
+            return
         
         try:
-            webbrowser.open(upgrade_url)
-            self.app.notify("Opening upgrade page in browser...", severity="information")
-        except:
-            self.app.notify("Please visit: https://telos.app/upgrade", severity="warning")
+            from core.backend_client import BackendClient
+            firebase_api_key = config.get('firebase', 'api_key')
+            email = config.get('account', 'email', default=None)
+            
+            if not email:
+                self.app.notify("Email not found. Please complete onboarding.", severity="error")
+                return
+            
+            backend = BackendClient(backend_url, firebase_api_key)
+            
+            # TODO: Add plan selection UI (monthly vs yearly)
+            # For now, default to yearly
+            plan = 'yearly'
+            
+            # Create checkout session
+            response = backend.create_checkout_session(plan=plan, email=email)
+            
+            checkout_url = response.get('url')
+            if checkout_url:
+                webbrowser.open(checkout_url)
+                self.app.notify("Opening Stripe Checkout...", severity="information")
+            else:
+                self.app.notify("Failed to create checkout session", severity="error")
+                
+        except Exception as e:
+            self.app.notify(f"Error: {str(e)}", severity="error")
         
         self.dismiss()
     

@@ -13,7 +13,15 @@ import analyzeRoutes from './routes/analyze.js';
 import authRoutes from './routes/auth.js';
 import feedbackRoutes from './routes/feedback.js';
 import reportsRoutes from './routes/reports.js';
+import checkoutRoutes from './routes/checkout.js';
 import { startScheduler } from './services/scheduler.js';
+import {
+  initializeSentry,
+  getRequestHandler,
+  getTracingHandler,
+  getErrorHandler
+} from './services/sentry.js';
+import { createPerformanceMonitoringMiddleware, notifyDeployment } from './services/monitoring.js';
 
 // Load environment variables
 dotenv.config();
@@ -27,8 +35,25 @@ startScheduler();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Initialize Sentry (must be first)
+initializeSentry(app);
+
+// Sentry request handler (must be the first middleware)
+app.use(getRequestHandler());
+
+// Sentry tracing handler (must be after request handler)
+app.use(getTracingHandler());
+
+// Performance monitoring middleware (tracks slow requests and errors)
+app.use(createPerformanceMonitoringMiddleware());
+
 // Middleware
 app.use(cors());
+
+// Stripe webhook needs raw body, so handle it before JSON parser
+app.use('/v1/checkout/webhook', express.raw({ type: 'application/json' }));
+
+// JSON parser forall other routes
 app.use(express.json());
 
 // Health check endpoint
@@ -56,6 +81,7 @@ app.use('/v1/analyze', analyzeRoutes);
 app.use('/v1/auth', authRoutes);
 app.use('/v1/feedback', feedbackRoutes);
 app.use('/v1/reports', reportsRoutes);
+app.use('/v1/checkout', checkoutRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -64,6 +90,9 @@ app.use((req, res) => {
     message: `Cannot ${req.method} ${req.path}`
   });
 });
+
+// Sentry error handler (must be after all routes, before other error handlers)
+app.use(getErrorHandler());
 
 // Error handler
 app.use((err, req, res, next) => {
@@ -79,6 +108,11 @@ app.listen(PORT, () => {
   console.log(`🚀 Telos Backend running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Notify deployment in production
+  if (process.env.NODE_ENV === 'production') {
+    notifyDeployment('0.1.0', 'production').catch(console.error);
+  }
 });
 
 export default app;

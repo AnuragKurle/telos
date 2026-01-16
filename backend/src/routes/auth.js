@@ -172,14 +172,8 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
 
     const safeEmail = email.toLowerCase().trim();
 
-    // 1. Check Whitelist
-    if (!betaUsers.includes(safeEmail)) {
-      console.warn(`[AUTH] Access denied for ${safeEmail} (not whitelisted)`);
-      return res.status(403).json({
-        error: 'Access Denied',
-        message: 'This email is not on the beta waitlist.'
-      });
-    }
+    // Beta access: Allow all signups (whitelist removed for launch)
+    console.log(`[AUTH] Processing trial activation for: ${safeEmail}`);
 
     // 2. Fetch or Create User Document
     const db = admin.firestore();

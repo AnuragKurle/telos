@@ -16,8 +16,12 @@ import { getScreenshotAnalysisPrompt } from './prompts.js';
  * Portkey Configuration
  * Reads from environment variables for security.
  */
-const PORTKEY_API_KEY = process.env.PORTKEY_API_KEY || 'AapMbWHuS0fvPfOSF9z4iOBuEYTm';
-const PORTKEY_VIRTUAL_KEY = process.env.PORTKEY_VIRTUAL_KEY || 'google-virtual-881dd3';
+const PORTKEY_API_KEY = process.env.PORTKEY_API_KEY;
+const PORTKEY_VIRTUAL_KEY = process.env.PORTKEY_VIRTUAL_KEY;
+
+if (!PORTKEY_API_KEY || !PORTKEY_VIRTUAL_KEY) {
+  throw new Error('PORTKEY_API_KEY and PORTKEY_VIRTUAL_KEY environment variables are required');
+}
 
 /**
  * Initialize Portkey client (singleton)

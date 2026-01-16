@@ -192,6 +192,8 @@ class DashboardScreen(Screen):
     def on_mount(self) -> None:
         """Called when screen is mounted."""
         self._update_graph_visibility()
+        # Update greeting every minute for time-accurate greetings
+        self.set_interval(60.0, self.update_greeting)
 
     def watch_graph_mode(self, old_mode: str, new_mode: str) -> None:
         """Update visibility when graph mode changes."""
@@ -366,6 +368,14 @@ class DashboardScreen(Screen):
         
         self.app.push_screen(UpgradeModal(backend_client, email))
 
+    def update_greeting(self) -> None:
+        """Update the greeting text based on current time."""
+        try:
+            greeting_widget = self.query_one("#greeting", Static)
+            greeting_widget.update(self.get_greeting())
+        except:
+            pass  # Widget might not be mounted yet
+    
     def get_greeting(self) -> str:
         """Get time-based creative greeting."""
         hour = datetime.now().hour
@@ -378,9 +388,9 @@ class DashboardScreen(Screen):
             period = "Good morning ☀️"
         elif 12 <= hour < 17:
             period = "Good afternoon 👋"
-        elif 17 <= hour < 22:
-            period = "Good evening 🌆"
-        else:
+        elif 17 <= hour < 21:
+            period = "Good evening 🧑‍💻"
+        else:  # 21:00 (9 PM) onwards
             period = "Working late 🌙"
             
         return f"{period}, {name}"

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from utils.config_manager import load_config, ConfigManager
 from utils.hash_utils import ScreenshotHasher
+from utils.sentry_utils import initialize_sentry, capture_exception, set_user, flush as flush_sentry
 from core.database import Database
 from core.capture import ActivityMonitor, ScreenshotCapture
 from core.analyzer import GeminiAnalyzer, RateLimitError
@@ -796,44 +797,66 @@ TUI Keyboard Shortcuts:
 
 def main():
     """Main entry point."""
-    if len(sys.argv) < 2:
-        command = "run"  # Default to TUI
-    else:
-        command = sys.argv[1].lower()
+    # Initialize Sentry error tracking
+    try:
+        initialize_sentry(
+            dsn=os.environ.get('SENTRY_DSN'),
+            environment=os.environ.get('SENTRY_ENVIRONMENT', 'production'),
+            release=f"telos-client@0.1.9"
+        )
+    except Exception as e:
+        print(f"Warning: Failed to initialize Sentry: {e}")
 
-    if command == "setup":
-        setup_config()
-    elif command == "run" or command == "tui":
-        run_tui()
-    elif command == "test":
-        test_capture_loop()
-    elif command == "stats":
-        show_stats()
-    elif command == "set-goals":
-        set_analysis_goals()
-    elif command == "build-sessions":
-        build_sessions()
-    elif command == "generate-summary":
-        generate_summary()
-    elif command == "test-email":
-        test_email()
-    elif command == "service-console":
-        run_service_console()
-    elif command == "install-service":
-        install_service()
-    elif command == "uninstall-service":
-        uninstall_service()
-    elif command == "start-service":
-        start_service()
-    elif command == "stop-service":
-        stop_service()
-    elif command == "service-status":
-        service_status()
-    elif command == "help":
-        show_usage()
-    else:
-        print(f"Unknown command: {command}")
-        print("Run 'python main.py help' for usage information")
+    try:
+        if len(sys.argv) < 2:
+            command = "run"  # Default to TUI
+        else:
+            command = sys.argv[1].lower()
+
+        if command == "setup":
+            setup_config()
+        elif command == "run" or command == "tui":
+            run_tui()
+        elif command == "test":
+            test_capture_loop()
+        elif command == "stats":
+            show_stats()
+        elif command == "set-goals":
+            set_analysis_goals()
+        elif command == "build-sessions":
+            build_sessions()
+        elif command == "generate-summary":
+            generate_summary()
+        elif command == "test-email":
+            test_email()
+        elif command == "service-console":
+            run_service_console()
+        elif command == "install-service":
+            install_service()
+        elif command == "uninstall-service":
+            uninstall_service()
+        elif command == "start-service":
+            start_service()
+        elif command == "stop-service":
+            stop_service()
+        elif command == "service-status":
+            service_status()
+        elif command == "help":
+            show_usage()
+        else:
+            print(f"Unknown command: {command}")
+            print("Run 'python main.py help' for usage information")
+
+    except Exception as e:
+        # Capture unhandled exceptions
+        capture_exception(e, context={
+            'tags': {'command': sys.argv[1] if len(sys.argv) > 1 else 'run'},
+            'extra': {'argv': sys.argv}
+        })
+        raise
+    finally:
+        # Flush Sentry events before exit
+        flush_sentry()
 
 
 if __name__ == "__main__":

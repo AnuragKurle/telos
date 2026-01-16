@@ -64,7 +64,7 @@ class UpgradeModal(ModalScreen):
                 yield Static("\nSupport indie development!", classes="benefit")
                 
                 with Horizontal(id="buttons"):
-                    yield Button("I'm Interested ($10/mo)", variant="success", id="upgrade-btn")
+                    yield Button("I'm Interested ($9/mo)", variant="success", id="upgrade-btn")
                     yield Button("Maybe Later", variant="default", id="cancel-btn")
                     
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -87,21 +87,88 @@ class UpgradeModal(ModalScreen):
         self.run_worker(self._record_intent_async())
             
     async def _record_intent_async(self) -> None:
-        """Record intent asynchronously."""
+        """Record intent and open checkout asynchronously."""
+        import webbrowser
         try:
             import asyncio
-            # Run the blocking request in a thread
-            success = await asyncio.to_thread(self.backend_client.record_payment_intent, self.email)
+            # Try to create a checkout session
+            response = await asyncio.to_thread(
+                self.backend_client.create_checkout_session,
+                plan='monthly',
+                email=self.email
+            )
             
-            if success:
-                self.app.notify("✓ Interest recorded!", severity="information")
+            checkout_url = response.get('url')
+            if checkout_url:
+                # Open the checkout URL in browser
+                webbrowser.open(checkout_url)
+                self.app.notify("Opening Dodo Payments checkout...", severity="information")
+                
+                # Schedule delayed status refresh after checkout
+                # User might complete payment in ~10-30 seconds
+                self._schedule_status_refresh()
+                
+                self.dismiss(True)
+                return
             else:
-                self.app.notify("⚠️ Could not reach server, but we'll show acknowledgment anyway.", severity="warning")
+                # Fallback: record intent only
+                await asyncio.to_thread(self.backend_client.record_payment_intent, self.email)
+                self.app.notify("⚠️ Could not create checkout session", severity="warning")
+                
         except Exception as e:
-            self.app.notify(f"Error: {str(e)}", severity="error")
+            # Fallback: just record intent
+            try:
+                import asyncio
+                await asyncio.to_thread(self.backend_client.record_payment_intent, self.email)
+                self.app.notify(f"✓ Interest recorded! (Checkout error: {str(e)[:50]})", severity="warning")
+            except:
+                self.app.notify(f"Error: {str(e)}", severity="error")
             
         self.dismiss(True)
-        self.app.push_screen(UpgradeSuccessModal())
+    
+    def _schedule_status_refresh(self) -> None:
+        """Schedule a delayed status refresh after checkout."""
+        import asyncio
+        
+        async def delayed_refresh():
+            """Wait then refresh status."""
+            await asyncio.sleep(15)  # Wait for payment processing
+            await self._refresh_and_notify()
+        
+        # Schedule the refresh
+        asyncio.create_task(delayed_refresh())
+    
+    async def _refresh_and_notify(self) -> None:
+        """Refresh account status and notify if upgraded."""
+        import asyncio
+        from core.trial_manager import TrialManager
+        
+        try:
+            config = self.app.config
+            backend_url = config.get('backend', 'url', default='')
+            firebase_api_key = config.get('firebase', 'api_key', default='')
+            
+            if not backend_url or not firebase_api_key:
+                return
+            
+            trial_manager = TrialManager(config)
+            
+            # Run refresh in thread to avoid blocking
+            result = await asyncio.to_thread(
+                trial_manager.refresh_account_status,
+                backend_url,
+                firebase_api_key
+            )
+            
+            if result and trial_manager.is_pro():
+                self.app.notify(
+                    "🎉 Welcome to Pro! Restart for full access.",
+                    severity="information",
+                    timeout=10
+                )
+        except Exception as e:
+            # Silently fail - this is a best-effort refresh
+            print(f"[UPGRADE] Status refresh failed: {e}")
 
 class UpgradeSuccessModal(ModalScreen):
     """Simple acknowledgement modal."""

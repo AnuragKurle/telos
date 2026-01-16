@@ -21,11 +21,19 @@ You MUST map your activity to ONE of these 5 buckets for dashboard statistics:
 
 ⚠️ CRITICAL MAPPING RULES:
 - Social media (Instagram, Twitter, Reddit, Facebook) → "browsing" (NOT work)
-- YouTube watching videos → "entertainment" (unless clearly educational tutorial)
+- YouTube videos → "entertainment" UNLESS title contains "tutorial", "how to", "course", programming terms → "learning"
 - Reading tech articles/docs → "learning"
-- GitHub/GitLab code work → "work"
+- GitHub/GitLab code work, Issues, PRs → "work"
+- Discord/Slack in work channels or discussing work → "work"
 - General web browsing → "browsing"
 - Casual/NSFW/distraction content → "browsing"
+
+⚠️ EDGE CASE HANDLING:
+- Split-screen/multiple windows: Prioritize the larger/focused window, or left-most if equal
+- Blurred/obfuscated/password screens: Return "idle" with ai_observations noting "screen content unclear"
+- Screen blank, locked, or screensaver: Return "idle"
+- OBS/Zoom screen-sharing: Analyze the shared content, not the streaming UI
+- If time is late night (after 11 PM or before 6 AM): Note in ai_observations "late-night session"
 
 ### category (string)
 What is the general category of this activity? (e.g., Debugging, Meeting, Research, Coding, Email, Break, etc.)
@@ -145,5 +153,3 @@ Example 4 - Entertainment:
   }
 }
 
-## Output
-Valid JSON only. Keep task CONCISE (≤80 chars). Put details in detailed_context.

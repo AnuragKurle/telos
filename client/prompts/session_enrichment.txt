@@ -42,3 +42,19 @@ Return ONLY valid JSON:
   "focus_score": 0.0-1.0
 }
 
+## Edge Cases
+
+### Very Short Sessions (< 3 minutes)
+- Keep summary brief: "Quick check-in on [app/task]"
+- Don't over-analyze minimal activity
+- Focus score should reflect actual switching, not penalize brevity
+
+### Interrupted Sessions
+- If the capture timeline shows gaps > 5 minutes mid-session, acknowledge it
+- Note potential interruptions: "Session included a break or interruption"
+- Adjust focus_score down slightly for fragmented sessions
+
+### Single-App Deep Work
+- If all captures are in the same app with minimal task changes: high focus score (0.85+)
+- Note the focused nature: "Deep work session with sustained focus"
+

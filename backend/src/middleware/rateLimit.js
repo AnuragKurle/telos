@@ -1,14 +1,15 @@
 /**
  * Rate Limiting Middleware (Firestore-based)
- * 
+ *
  * Tracks and enforces rate limits per user (uid):
  * - 100 requests per hour
  * - 2000 requests per day
- * 
+ *
  * Stores counters in Firestore for distributed rate limiting.
  */
 
 import { getFirestore } from '../config/firebase.js';
+import { monitorQuotaUsage } from '../services/monitoring.js';
 
 /**
  * Get current hour and day timestamps for bucketing
@@ -134,12 +135,23 @@ export async function rateLimitMiddleware(req, res, next) {
         ? `Rate limit exceeded. Try again in ${result.retryAfter} seconds.`
         : `Daily rate limit exceeded. Try again in ${result.retryAfter} seconds.`;
 
+      // Monitor rate limit hits (only for daily limit)
+      if (result.type === 'daily') {
+        monitorQuotaUsage(uid, dailyLimit, dailyLimit).catch(console.error);
+      }
+
       return res.status(429).json({
         error: 'RateLimitError',
         message,
         retry_after: result.retryAfter,
         code: 'RATE_LIMIT_EXCEEDED',
       });
+    }
+
+    // Monitor users approaching their quota (at 80% and 90%)
+    const dailyUsagePercent = (result.dailyCount / dailyLimit) * 100;
+    if (dailyUsagePercent >= 80) {
+      monitorQuotaUsage(uid, result.dailyCount, dailyLimit).catch(console.error);
     }
 
     // Add rate limit headers to response

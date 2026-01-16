@@ -19,7 +19,16 @@
       "Bash(ls:*)",
       "Bash(del:*)",
       "Bash(sqlite3:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge main-monorepo -m \"$\\(cat <<''EOF''\nMerge email scheduler timing fixes from main-monorepo\n\nBrings in critical email scheduler fix:\n- Fixed 30-minute delay for half-hour timezones \\(IST, etc.\\)\n- Reduced data staleness window from 7 to 3 days\n- Added user warnings for stale data\n- Improved timezone handling and logging\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(chmod:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(client\\): Add Firestore sync worker to fix email reports\n\nCRITICAL FIX: Backend email scheduler requires data in Firestore, but client\nonly stored data locally in SQLite. This created a gap where no emails were\nsent because backend had no data to work with.\n\nRoot Cause:\n- Client: Local-first, stores all captures in SQLite\n- Backend: Expects data in Firestore at usage/{userId}/dayBucket/{date}\n- Missing: No sync mechanism to bridge SQLite → Firestore\n\nSolution - Firestore Sync Worker:\n- New background worker that syncs SQLite captures to Firestore daily\n- Runs every 24 hours automatically in TUI app\n- Syncs yesterday''s data \\(complete\\) to ensure emails work next day\n- Smart date selection: only syncs dates with data, max 7-day lookback\n- Handles long-running sessions correctly \\(multi-day without restart\\)\n\nFeatures:\n- Automatic daily sync \\(24-hour interval\\)\n- Manual sync script for testing/recovery\n- Incremental sync \\(tracks last sync date, no duplicates\\)\n- Firestore REST API integration \\(no Admin SDK required\\)\n- Robust error handling and logging\n- Safe concurrent operation\n\nFiles Added:\n- client/core/firestore_sync.py - Main sync worker\n- client/manual_firestore_sync.py - Manual sync script\n- client/FIRESTORE_SYNC_README.md - Complete documentation\n\nFiles Modified:\n- client/core/database.py - Updated get_captures_for_date\\(\\) to accept strings\n- client/tui/app.py - Integrated sync worker into TUI lifecycle\n\nTesting:\nRun manual sync to verify: python client/manual_firestore_sync.py\n\nImpact:\n- Fixes email reports \\(backend now has data\\)\n- Enables server-side summary generation\n- Supports users who run client 24/7 without restart\n\nSee FIRESTORE_SYNC_README.md for detailed architecture and usage.\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)"
     ]
   }
 }

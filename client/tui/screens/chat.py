@@ -195,6 +195,16 @@ class ChatScreen(Screen):
         if not user_query:
             return
 
+        # Check trial status before processing
+        from core.trial_manager import TrialManager
+        trial_manager = TrialManager(self.app.config)
+        if trial_manager.is_trial_expired() and not trial_manager.is_pro():
+            self.add_message("system", "❌ Trial expired. AI Chat is unavailable. Please upgrade to continue.")
+            from tui.screens.upgrade import UpgradeScreen
+            self.app.push_screen(UpgradeScreen(trial_manager))
+            event.input.value = ""
+            return
+
         if self.is_processing:
             self.add_message('system', "⏳ Please wait for the current query to complete...")
             return

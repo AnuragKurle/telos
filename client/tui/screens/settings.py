@@ -6,11 +6,13 @@ from textual.widgets import Header, Footer, Static
 from textual.containers import ScrollableContainer
 from typing import Optional
 
+from core.trial_manager import TrialManager
+
 from core.database import Database
 from core.goal_manager import AnalysisGoalManager
 from core.backend_client import BackendClient, BackendError, AuthenticationError
 from tui.screens.goal_editor import GoalEditorModal
-from tui.screens.feedback_modal import FeedbackModal
+from tui.screens.email_settings_modal import EmailSettingsModal
 from tui.screens.feedback_modal import FeedbackModal
 from tui.screens.upgrade_modal import UpgradeModal
 
@@ -20,7 +22,7 @@ class SettingsScreen(Screen):
 
     BINDINGS = [
         ("g", "edit_goals", "Edit Goals"),
-        ("u", "show_upgrade", "Upgrade to Pro"),
+        ("e", "edit_email", "Email Settings"),
         ("escape", "app.pop_screen", "Back"),
         ("q", "app.quit", "Quit"),
     ]
@@ -46,6 +48,14 @@ class SettingsScreen(Screen):
 
         self.app.push_screen(GoalEditorModal(self.app.config, on_save=on_goals_saved))
 
+    def action_edit_email(self) -> None:
+        """Open email settings modal."""
+        def on_email_saved():
+            # Refresh settings display after saving
+            self.update_settings()
+
+        self.app.push_screen(EmailSettingsModal(self.app.config, on_save=on_email_saved))
+
     def update_settings(self) -> None:
         """Update settings display."""
         app = self.app
@@ -54,7 +64,17 @@ class SettingsScreen(Screen):
         # Account Info (use correct config.get API)
         name = config.get('account', 'name', default='User')
         email = config.get('account', 'email', default='Not set')
-        plan = config.get('account', 'status', default='trial').upper()
+        status = config.get('account', 'status', default='trial')
+        
+        # Check Pro status using TrialManager
+        trial_manager = TrialManager(config)
+        is_pro = trial_manager.is_pro()
+        
+        # Format plan display
+        if is_pro:
+            plan = "✨ PRO"
+        else:
+            plan = status.upper()
         
         # Email Preferences
         send_time = config.get('email', 'send_time', default='21:00')
@@ -68,6 +88,12 @@ class SettingsScreen(Screen):
         preset_info = AnalysisGoalManager.PRESET_GOALS.get(preset, {})
         preset_name = preset_info.get('name', preset)
 
+        # Conditional upgrade text
+        if is_pro:
+            upgrade_line = "Thank you for supporting Telos! 💙"
+        else:
+            upgrade_line = "Press U to Upgrade to Pro"
+
         settings_text = f"""
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║                                 SETTINGS                                 ║
@@ -78,20 +104,30 @@ class SettingsScreen(Screen):
   Email: {email}
   Plan:  {plan}
 
-📧 PREFERENCES
+📧 EMAIL PREFERENCES
   Daily Report: {email_enabled}
   Report Time:  {send_time}
 
+  [ Press E to Edit Email Settings ]
+
 🎯 ANALYSIS GOALS
   Current Focus: {preset_name}
-  
+
   [ Press G to Change Goals ]
 
 ───────────────────────────────────────────────────────────────────────────
-Press U to Upgrade to Pro
+{upgrade_line}
 Press ESC to Back
 """
         self.query_one("#settings-content").update(settings_text)
+        
+        # Dynamically update bindings based on pro status
+        self._update_bindings_for_status(is_pro)
+    
+    def _update_bindings_for_status(self, is_pro: bool) -> None:
+        """Update key bindings based on subscription status."""
+        # The bindings are static at class level, but we can control action behavior
+        pass  # We'll handle this via check_action
 
     def action_show_feedback(self) -> None:
         """Show feedback modal for settings screen."""
@@ -183,6 +219,12 @@ Press ESC to Back
 
     def action_show_upgrade(self) -> None:
         """Show upgrade modal."""
+        # Check if already pro
+        trial_manager = TrialManager(self.app.config)
+        if trial_manager.is_pro():
+            self.app.notify("You're already a Pro user! 🎉", severity="information")
+            return
+        
         # Get email from config
         email = self.app.config.get('account', 'email', default="")
         

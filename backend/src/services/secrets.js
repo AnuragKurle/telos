@@ -48,7 +48,7 @@ export async function getSecret(secretName, version = 'latest') {
     const [response] = await client.accessSecretVersion({ name });
 
     // Extract the payload
-    const secretValue = response.payload.data.toString('utf8');
+    const secretValue = response.payload.data.toString('utf8').trim();
 
     // Cache the secret
     secretCache.set(cacheKey, secretValue);

@@ -13,22 +13,48 @@ from core.fallback_handler import FallbackHandler, FallbackMode
 from utils.hash_utils import ScreenshotHasher
 
 
-async def poll_window_changes_async(window_event_tracker, stop_event: asyncio.Event, poll_interval: float = 1.0):
-    """Async background task to poll for window changes every poll_interval seconds.
-    
+async def poll_window_changes_async(window_event_tracker, stop_event: asyncio.Event, app, poll_interval: float = 1.0):
+    """Async background task to poll for window changes and update UI immediately.
+
     Args:
         window_event_tracker: WindowEventTracker instance
         stop_event: asyncio.Event to signal when to stop polling
+        app: TUI app instance to update UI
         poll_interval: How often to poll for window changes (default 1 second)
     """
+    last_window_title = None
+    last_app_name = None
+
     while not stop_event.is_set():
         try:
-            # Run the blocking poll in a thread to avoid blocking the async loop
+            # Get current window info (non-blocking, just reads current state)
+            current_window = await asyncio.to_thread(
+                window_event_tracker.window_monitor.get_active_window_info
+            )
+            current_title = current_window.get('title', '')
+            current_app = current_window.get('app_name', '')
+
+            # Only update if window actually changed
+            if (current_title != last_window_title or current_app != last_app_name):
+                if current_app and current_app != 'Unknown':
+                    # Update UI immediately with raw window info
+                    app.current_app = current_app
+                    app.current_window_title = current_title
+
+                    # Start/reset timer for new window
+                    if current_app != last_app_name:
+                        app.activity_start_time = datetime.now()
+
+                    last_window_title = current_title
+                    last_app_name = current_app
+
+            # Also poll window changes for tracking (separate from UI update)
             await asyncio.to_thread(window_event_tracker.poll_window_changes)
+
         except Exception as e:
             # Don't crash on polling errors, just continue
             pass
-        
+
         # Wait for next poll or until stop is signaled
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=poll_interval)
@@ -97,27 +123,23 @@ async def capture_worker_task(app):
     # Start activity monitoring
     activity_monitor.start()
 
+    # Start continuous window polling (runs independently of capture cycle)
+    continuous_poll_stop = asyncio.Event()
+    continuous_poll_task = asyncio.create_task(
+        poll_window_changes_async(window_event_tracker, continuous_poll_stop, app, poll_interval=1.0)
+    )
+
     try:
         while not app.shutting_down:
             # Start window event tracking for this capture interval
             window_event_tracker.start_interval()
-            
-            # Create stop event for window polling
-            poll_stop_event = asyncio.Event()
-            
-            # Start background polling for window changes (polls every 1 second)
-            poll_task = asyncio.create_task(
-                poll_window_changes_async(window_event_tracker, poll_stop_event)
-            )
-            
+
             try:
                 # Check if idle
                 if activity_monitor.is_idle():
                     idle_time = activity_monitor.seconds_since_activity()
                     app.loop_status = "idle"
                     app.idle_seconds = idle_time
-                    poll_stop_event.set()
-                    await poll_task
                     await asyncio.sleep(5)
                     continue
 
@@ -127,8 +149,6 @@ async def capture_worker_task(app):
 
                 if api_usage >= max_daily_requests:
                     app.loop_status = "paused"
-                    poll_stop_event.set()
-                    await poll_task
                     await asyncio.sleep(interval)
                     continue
 
@@ -136,12 +156,8 @@ async def capture_worker_task(app):
                 app.loop_status = "active"
                 app.idle_seconds = 0
 
-                # Wait for capture interval (minus some overhead) while polling for window changes
+                # Wait for capture interval
                 await asyncio.sleep(max(1, interval - 2))
-                
-                # Stop window polling before capture
-                poll_stop_event.set()
-                await poll_task
 
                 # Capture screenshot (run in thread to avoid blocking UI)
                 screenshot_path = await asyncio.to_thread(capturer.capture)
@@ -172,6 +188,20 @@ async def capture_worker_task(app):
                     'window_changes': window_summary['total_changes'],
                     'window_events': window_event_tracker.get_limited_events(limit=5),
                 }
+
+                # Update UI immediately with raw window info (before LLM analysis)
+                # This provides instant feedback while waiting for enriched data
+                window_app = window_info.get('app_name', 'Unknown')
+                window_title = window_info.get('title', 'No window')
+
+                # Check if this is a new activity (different app or window)
+                if window_app != app.current_app or window_title != app.current_window_title:
+                    # Start timer immediately for new activity
+                    app.activity_start_time = datetime.now()
+
+                app.current_app = window_app
+                app.current_window_title = window_title
+                # Don't set task/category yet - these come from LLM
 
                 # Analyze with backend or local Gemini (Phase 2)
                 try:
@@ -230,17 +260,19 @@ async def capture_worker_task(app):
                         # Increment API usage
                         db.increment_api_usage()
 
-                        # Update UI state
-                        # Check if activity changed (different category or app)
-                        if (result['category'] != app.current_category or
-                            result['app'] != app.current_app):
-                            # Reset timer for new activity
+                        # Update UI state with enriched LLM data
+                        # Note: Timer already started when we captured window info
+                        # Only reset timer if LLM detected a genuinely different app
+                        # (category changes alone don't reset timer)
+                        if result['app'] != app.current_app:
+                            # App changed between capture and analysis (rare)
                             app.activity_start_time = datetime.now()
+                            app.current_app = result['app']
 
+                        # Update enriched data
                         app.current_category = result['category']
                         app.current_emoji = result.get('category_emoji', '📝')
                         app.current_color = result.get('category_color', '#95a5a6')
-                        app.current_app = result['app']
                         app.current_task = result['task']
                         app.last_analysis_source = result.get('_source', 'local')
 
@@ -261,18 +293,18 @@ async def capture_worker_task(app):
                 # Cleanup screenshot
                 await asyncio.to_thread(capturer.cleanup_screenshot, screenshot_path)
 
-            finally:
-                # Ensure polling task is stopped even if an exception occurred
-                if not poll_stop_event.is_set():
-                    poll_stop_event.set()
-                if not poll_task.done():
-                    try:
-                        await asyncio.wait_for(poll_task, timeout=1.0)
-                    except asyncio.TimeoutError:
-                        poll_task.cancel()
+            except Exception as loop_error:
+                # Catch any unexpected errors in the try block
+                print(f"[Capture Worker] Unexpected error: {loop_error}")
+                await asyncio.sleep(5)
 
     finally:
         # Cleanup on shutdown
+        continuous_poll_stop.set()
+        try:
+            await asyncio.wait_for(continuous_poll_task, timeout=2.0)
+        except asyncio.TimeoutError:
+            continuous_poll_task.cancel()
         activity_monitor.stop()
         capturer.cleanup_all()
 

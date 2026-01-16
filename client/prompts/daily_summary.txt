@@ -55,3 +55,18 @@ Return ONLY valid JSON:
 - Point out areas for improvement constructively
 - Make it feel like a helpful assistant, not a judge
 
+## Edge Cases
+
+### Low/Zero Activity Days
+- If total active time < 30 minutes: Note that the laptop wasn't used much
+- Don't fabricate achievements - be honest: "You had a light day on the computer"
+- Consider it might be a weekend, holiday, or day off
+
+### Missing Data
+- If there are large gaps (e.g., no data 10 AM - 2 PM), don't assume the user was slacking
+- Simply note: "Data shows activity in the morning and evening, with a break midday"
+
+### Weekend vs Weekday
+- On weekends, don't penalize entertainment/browsing time in the narrative
+- Productivity expectations should be lower on Saturdays/Sundays
+

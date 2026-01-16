@@ -350,3 +350,55 @@ class TrialManager:
         
         self.config.config['account'] = account_config
         self.config.save(self.config.config)
+
+    def refresh_account_status(self, backend_url: str, firebase_api_key: str) -> bool:
+        """Sync account status from backend.
+        
+        Fetches the latest user status from the server and updates local config.
+        
+        Args:
+            backend_url: Backend API URL
+            firebase_api_key: Firebase API key for authentication
+            
+        Returns:
+            True if status was successfully refreshed, False otherwise
+        """
+        from core.backend_client import BackendClient, BackendError, AuthenticationError
+        
+        email = self.config.config.get('account', {}).get('email')
+        if not email:
+            return False
+            
+        try:
+            client = BackendClient(backend_url, firebase_api_key)
+            response = client.get_user_status(email)
+            
+            access_status = response.get('accessStatus', 'trial')
+            
+            # Update local config based on server status
+            if access_status == 'pro':
+                self.mark_pro(email)
+                return True
+            elif access_status == 'expired':
+                # Update account status to expired
+                account_config = self.config.config.get('account', {})
+                account_config['status'] = 'expired'
+                self.config.config['account'] = account_config
+                self.config.save(self.config.config)
+                return True
+            elif access_status == 'trial':
+                # Update trial dates if provided
+                trial_start = response.get('trialStartDate')
+                trial_end = response.get('trialEndDate')
+                if trial_start and trial_end:
+                    self.activate_trial(email, trial_start, trial_end)
+                return True
+                
+            return True
+            
+        except (BackendError, AuthenticationError) as e:
+            print(f"[TRIAL] Failed to refresh account status: {e}")
+            return False
+        except Exception as e:
+            print(f"[TRIAL] Unexpected error refreshing status: {e}")
+            return False
