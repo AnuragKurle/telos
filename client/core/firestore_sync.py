@@ -22,14 +22,25 @@ class FirestoreSyncError(Exception):
 
 
 class FirestoreSync:
-    """Manages syncing local SQLite data to Firestore."""
+    """Manages syncing local SQLite data to Firestore.
+
+    IMPORTANT: This sync is critical for email reports to work.
+    The backend email scheduler depends on data being in Firestore.
+    """
+
+    # Sync every 4 hours to ensure data availability for emails
+    DEFAULT_SYNC_INTERVAL_HOURS = 4
+
+    # Maximum retry attempts for failed syncs
+    MAX_RETRY_ATTEMPTS = 3
+    RETRY_DELAY_SECONDS = 300  # 5 minutes between retries
 
     def __init__(
         self,
         db: 'Database',
         firebase_auth: 'FirebaseAuth',
         firebase_project_id: str,
-        sync_interval_hours: int = 24
+        sync_interval_hours: int = None
     ):
         """Initialize Firestore sync.
 
@@ -37,54 +48,113 @@ class FirestoreSync:
             db: Database instance
             firebase_auth: Firebase auth instance
             firebase_project_id: Firebase project ID
-            sync_interval_hours: Hours between automatic syncs (default: 24)
+            sync_interval_hours: Hours between automatic syncs (default: 4)
         """
         self.db = db
         self.firebase_auth = firebase_auth
         self.firebase_project_id = firebase_project_id
-        self.sync_interval_hours = sync_interval_hours
+        # Use 4 hours by default for more frequent syncing
+        self.sync_interval_hours = sync_interval_hours or self.DEFAULT_SYNC_INTERVAL_HOURS
 
         # Firestore REST API base URL
         self.firestore_url = f"https://firestore.googleapis.com/v1/projects/{firebase_project_id}/databases/(default)/documents"
 
-        # Track last sync
+        # Track sync state
         self.last_sync_date: Optional[str] = None
+        self.last_sync_time: Optional[datetime] = None
         self.running = False
+        self.consecutive_failures = 0
+        self.total_syncs = 0
+        self.total_failures = 0
 
     async def start(self):
-        """Start the sync worker loop."""
+        """Start the sync worker loop.
+
+        Runs sync immediately on startup, then every sync_interval_hours.
+        Includes retry logic for failed syncs.
+        """
         self.running = True
 
-        # Load last sync date from config
+        # Load last sync state from config
         self.last_sync_date = self.db.get_config_value('last_firestore_sync_date')
+        last_sync_time_str = self.db.get_config_value('last_firestore_sync_time')
+        if last_sync_time_str:
+            try:
+                self.last_sync_time = datetime.strptime(last_sync_time_str, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                self.last_sync_time = None
 
-        print(f"[Firestore Sync] Starting worker (interval: {self.sync_interval_hours}h)")
-        if self.last_sync_date:
-            print(f"[Firestore Sync] Last sync: {self.last_sync_date}")
+        print(f"\n[Firestore Sync] ========================================")
+        print(f"[Firestore Sync] Starting worker")
+        print(f"[Firestore Sync] Interval: {self.sync_interval_hours} hours")
+        print(f"[Firestore Sync] Last sync date: {self.last_sync_date or 'Never'}")
+        print(f"[Firestore Sync] Last sync time: {self.last_sync_time or 'Never'}")
+        print(f"[Firestore Sync] ========================================\n")
 
-        # Run initial sync on startup (after short delay)
-        await asyncio.sleep(60)  # Wait 1 minute after app start
-        await self._run_sync()
+        # Run initial sync on startup (after short delay to let app initialize)
+        await asyncio.sleep(30)  # Reduced to 30 seconds for faster initial sync
+        await self._run_sync_with_retry()
 
         # Then run periodic sync
         while self.running:
             try:
-                # Sleep for configured interval
-                await asyncio.sleep(self.sync_interval_hours * 3600)
+                # Sleep for configured interval (in seconds)
+                interval_seconds = self.sync_interval_hours * 3600
+                print(f"[Firestore Sync] Next sync in {self.sync_interval_hours} hours")
+                await asyncio.sleep(interval_seconds)
 
-                # Run sync
-                await self._run_sync()
+                # Run sync with retry logic
+                await self._run_sync_with_retry()
 
+            except asyncio.CancelledError:
+                print(f"[Firestore Sync] Worker cancelled, stopping...")
+                break
             except Exception as e:
                 print(f"[Firestore Sync] Error in worker loop: {e}")
-                # Continue running even if sync fails
-                await asyncio.sleep(600)  # Wait 10 min before retrying
+                self.consecutive_failures += 1
+                self.total_failures += 1
+                # Back off more if we keep failing
+                backoff_time = min(600 * self.consecutive_failures, 3600)  # Max 1 hour
+                print(f"[Firestore Sync] Backing off for {backoff_time}s (failures: {self.consecutive_failures})")
+                await asyncio.sleep(backoff_time)
 
-    async def _run_sync(self):
-        """Run a sync cycle."""
+    async def _run_sync_with_retry(self):
+        """Run sync with retry logic on failure."""
+        for attempt in range(1, self.MAX_RETRY_ATTEMPTS + 1):
+            try:
+                success = await self._run_sync()
+                if success:
+                    self.consecutive_failures = 0
+                    return True
+                else:
+                    # Sync ran but no data to sync - not a failure
+                    self.consecutive_failures = 0
+                    return True
+            except Exception as e:
+                print(f"[Firestore Sync] Attempt {attempt}/{self.MAX_RETRY_ATTEMPTS} failed: {e}")
+                self.total_failures += 1
+                if attempt < self.MAX_RETRY_ATTEMPTS:
+                    print(f"[Firestore Sync] Retrying in {self.RETRY_DELAY_SECONDS}s...")
+                    await asyncio.sleep(self.RETRY_DELAY_SECONDS)
+                else:
+                    print(f"[Firestore Sync] All retry attempts exhausted")
+                    self.consecutive_failures += 1
+                    return False
+        return False
+
+    async def _run_sync(self) -> bool:
+        """Run a sync cycle.
+
+        Returns:
+            True if sync was successful (or no data to sync), False on failure.
+        """
         try:
+            self.total_syncs += 1
+            sync_start = datetime.now()
+
             print(f"\n[Firestore Sync] ========================================")
-            print(f"[Firestore Sync] Starting sync at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"[Firestore Sync] Starting sync #{self.total_syncs}")
+            print(f"[Firestore Sync] Time: {sync_start.strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"[Firestore Sync] ========================================")
 
             # Determine which dates to sync
@@ -92,74 +162,114 @@ class FirestoreSync:
 
             if not dates_to_sync:
                 print(f"[Firestore Sync] No dates to sync")
-                return
+                # Still update sync time even if no data
+                self._update_sync_time(sync_start)
+                return True
 
             print(f"[Firestore Sync] Found {len(dates_to_sync)} date(s) to sync: {', '.join(dates_to_sync)}")
 
             # Sync each date
             success_count = 0
             error_count = 0
+            synced_dates = []
 
             for date_str in dates_to_sync:
                 try:
                     await self._sync_date(date_str)
                     success_count += 1
+                    synced_dates.append(date_str)
                     print(f"[Firestore Sync] ✓ Synced {date_str}")
                 except Exception as e:
                     error_count += 1
                     print(f"[Firestore Sync] ✗ Failed to sync {date_str}: {e}")
 
             # Update last sync date to most recent successful sync
-            if success_count > 0:
-                latest_synced = max(dates_to_sync[:success_count])
+            if synced_dates:
+                latest_synced = max(synced_dates)
                 self.db.set_config_value('last_firestore_sync_date', latest_synced)
                 self.last_sync_date = latest_synced
                 print(f"[Firestore Sync] Updated last sync date to {latest_synced}")
 
+            # Always update sync time
+            self._update_sync_time(sync_start)
+
+            sync_duration = (datetime.now() - sync_start).total_seconds()
+
             print(f"\n[Firestore Sync] ========================================")
-            print(f"[Firestore Sync] Sync complete: {success_count} success, {error_count} errors")
+            print(f"[Firestore Sync] Sync complete in {sync_duration:.1f}s")
+            print(f"[Firestore Sync]   ✓ Success: {success_count}")
+            print(f"[Firestore Sync]   ✗ Errors: {error_count}")
+            print(f"[Firestore Sync]   Total syncs: {self.total_syncs}, Total failures: {self.total_failures}")
             print(f"[Firestore Sync] ========================================\n")
+
+            return error_count == 0
 
         except Exception as e:
             print(f"[Firestore Sync] Error running sync: {e}")
+            raise  # Re-raise for retry logic
+
+    def _update_sync_time(self, sync_time: datetime):
+        """Update the last sync time in config."""
+        self.last_sync_time = sync_time
+        self.db.set_config_value('last_firestore_sync_time', sync_time.strftime('%Y-%m-%d %H:%M:%S'))
 
     def _get_dates_to_sync(self) -> List[str]:
         """Get list of dates that need syncing.
+
+        IMPORTANT: This method now syncs BOTH yesterday's complete data AND
+        today's partial data. This ensures the backend always has the most
+        recent data available for email generation.
+
+        Strategy:
+        - Always include today (even partial) and yesterday
+        - If there's a last_sync_date, also include any missed days
+        - Look back up to 7 days to catch any gaps
 
         Returns:
             List of date strings (YYYY-MM-DD) sorted chronologically
         """
         today = datetime.now().date()
+        dates_to_check = set()
 
-        # Default: sync last 3 days
-        start_date = today - timedelta(days=3)
+        # ALWAYS include today and yesterday - these are critical for email reports
+        dates_to_check.add(today)  # Today's partial data
+        dates_to_check.add(today - timedelta(days=1))  # Yesterday's complete data
 
-        # If we have a last sync date, start from there
+        # Also check the last 3 days to catch any gaps
+        for i in range(2, 4):
+            dates_to_check.add(today - timedelta(days=i))
+
+        # If we haven't synced recently, look back further
         if self.last_sync_date:
             try:
                 last_sync = datetime.strptime(self.last_sync_date, '%Y-%m-%d').date()
-                # Sync from day after last sync, but no more than 7 days back
-                start_date = max(last_sync + timedelta(days=1), today - timedelta(days=7))
+                # If last sync was more than a day ago, add all dates since then
+                days_since_sync = (today - last_sync).days
+                if days_since_sync > 1:
+                    print(f"[Firestore Sync] Last sync was {days_since_sync} days ago, checking for gaps")
+                    for i in range(1, min(days_since_sync + 1, 8)):  # Max 7 days
+                        dates_to_check.add(today - timedelta(days=i))
             except ValueError:
                 print(f"[Firestore Sync] Invalid last sync date: {self.last_sync_date}")
+        else:
+            # First sync ever - sync last 7 days
+            print(f"[Firestore Sync] First sync, checking last 7 days")
+            for i in range(1, 8):
+                dates_to_check.add(today - timedelta(days=i))
 
-        # Don't sync today (wait until tomorrow to sync yesterday's complete data)
-        end_date = today - timedelta(days=1)
-
-        if start_date > end_date:
-            return []
-
-        # Generate list of dates
-        dates = []
-        current = start_date
-        while current <= end_date:
-            # Check if this date has data
-            captures = self.db.get_captures_for_date(current.strftime('%Y-%m-%d'))
+        # Filter to dates that actually have data
+        dates_with_data = []
+        for date in sorted(dates_to_check):
+            date_str = date.strftime('%Y-%m-%d')
+            captures = self.db.get_captures_for_date(date_str)
             if captures:
-                dates.append(current.strftime('%Y-%m-%d'))
-            current += timedelta(days=1)
+                capture_count = len(captures)
+                print(f"[Firestore Sync]   {date_str}: {capture_count} captures")
+                dates_with_data.append(date_str)
+            else:
+                print(f"[Firestore Sync]   {date_str}: no data")
 
-        return dates
+        return dates_with_data
 
     async def _sync_date(self, date_str: str):
         """Sync captures for a specific date to Firestore.
@@ -421,15 +531,71 @@ class FirestoreSync:
         self.running = False
         print("[Firestore Sync] Worker stopped")
 
-    async def force_sync(self, date_str: Optional[str] = None):
-        """Manually trigger a sync.
+    def get_sync_status(self) -> Dict[str, Any]:
+        """Get current sync status for diagnostics.
+
+        Returns:
+            Dict with sync statistics and state
+        """
+        return {
+            'running': self.running,
+            'last_sync_date': self.last_sync_date,
+            'last_sync_time': self.last_sync_time.strftime('%Y-%m-%d %H:%M:%S') if self.last_sync_time else None,
+            'sync_interval_hours': self.sync_interval_hours,
+            'total_syncs': self.total_syncs,
+            'total_failures': self.total_failures,
+            'consecutive_failures': self.consecutive_failures,
+        }
+
+    async def force_sync(self, date_str: Optional[str] = None) -> bool:
+        """Manually trigger a sync with retry logic.
 
         Args:
             date_str: Specific date to sync (YYYY-MM-DD), or None for automatic selection
+
+        Returns:
+            True if sync was successful
         """
         if date_str:
             print(f"[Firestore Sync] Force syncing {date_str}")
-            await self._sync_date(date_str)
+            try:
+                await self._sync_date(date_str)
+                return True
+            except Exception as e:
+                print(f"[Firestore Sync] Force sync failed: {e}")
+                return False
         else:
-            print(f"[Firestore Sync] Force syncing recent dates")
-            await self._run_sync()
+            print(f"[Firestore Sync] Force syncing all recent dates")
+            return await self._run_sync_with_retry()
+
+    async def sync_for_email(self) -> bool:
+        """Sync data specifically for email generation.
+
+        This ensures yesterday's data is available before email is sent.
+        Called by the backend before generating emails.
+
+        Returns:
+            True if yesterday's data was synced successfully
+        """
+        yesterday = (datetime.now().date() - timedelta(days=1)).strftime('%Y-%m-%d')
+        print(f"[Firestore Sync] Pre-email sync for {yesterday}")
+
+        try:
+            # Check if we have data for yesterday
+            captures = await asyncio.to_thread(
+                self.db.get_captures_for_date,
+                yesterday
+            )
+
+            if not captures:
+                print(f"[Firestore Sync] No captures found for {yesterday}")
+                return False
+
+            # Sync yesterday's data
+            await self._sync_date(yesterday)
+            print(f"[Firestore Sync] ✓ Pre-email sync complete for {yesterday}")
+            return True
+
+        except Exception as e:
+            print(f"[Firestore Sync] Pre-email sync failed: {e}")
+            return False

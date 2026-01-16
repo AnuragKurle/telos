@@ -327,6 +327,73 @@ class BackendClient:
         except requests.RequestException as e:
             raise BackendError(f"Network error: {e}")
 
+    def update_email_preferences(
+        self,
+        preferences: Dict[str, Any],
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Update email report preferences.
+
+        Args:
+            preferences: Email preferences dict with keys:
+                - enabled: bool
+                - sendTime: str (HH:MM format)
+                - timezone: str
+                - frequency: str ('daily')
+                - preferredHour: int
+            retry_auth: Retry with fresh token if auth fails
+
+        Returns:
+            Response dict with success status
+
+        Raises:
+            AuthenticationError: If authentication fails
+            BackendError: If request fails
+        """
+        # Apply client-side rate limiting
+        self._apply_rate_limit()
+
+        # Get Firebase token
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+
+            response = requests.put(
+                f"{self.backend_url}/v1/reports/email-preferences",
+                json=preferences,
+                headers=headers,
+                timeout=self.timeout
+            )
+
+            # Handle response codes
+            if response.status_code in (200, 201):
+                return response.json()
+
+            elif response.status_code == 401:
+                # Token expired, retry with fresh token
+                if retry_auth:
+                    self.firebase_auth.refresh_token()
+                    return self.update_email_preferences(preferences, retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed after token refresh")
+
+            else:
+                raise BackendError(f"Unexpected status {response.status_code}: {response.text[:200]}")
+
+        except requests.Timeout:
+            raise BackendError(f"Request timed out after {self.timeout}s")
+
+        except requests.RequestException as e:
+            raise BackendError(f"Network error: {e}")
+
     def verify_access(
         self,
         email: str,
@@ -445,6 +512,214 @@ class BackendClient:
         except Exception as e:
             print(f"Error recording payment intent: {e}")
             return False
+    
+    def create_checkout_session(
+        self,
+        plan: str,
+        email: str,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Create a Stripe Checkout session for subscription.
+        
+        Args:
+            plan: Plan type ('monthly' or 'yearly')
+            email: User email
+            retry_auth: Retry on token expiry
+            
+        Returns:
+            Dict with 'sessionId' and 'url' for Stripe Checkout
+            
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails
+        """
+        self._apply_rate_limit()
+        
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+            
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+            
+            response = requests.post(
+                f"{self.backend_url}/v1/checkout/create-session",
+                json={'plan': plan, 'email': email},
+                headers=headers,
+                timeout=self.timeout
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+                
+            elif response.status_code == 401:
+                if retry_auth:
+                    token = self.firebase_auth.get_token(force_refresh=True)
+                    return self.create_checkout_session(plan, email, retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed")
+                    
+            elif response.status_code == 400:
+                error_msg = response.json().get('error', 'Bad request')
+                raise BackendError(f"Invalid checkout request: {error_msg}")
+                
+            else:
+                raise BackendError(f"Server error: {response.status_code}")
+                
+        except requests.RequestException as e:
+            raise BackendError(f"Connection error: {e}")
+
+    def get_user_status(
+        self,
+        email: str,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Fetch current user status from backend.
+
+        This is a lightweight method to refresh the user's subscription status.
+
+        Args:
+            email: User's email address
+            retry_auth: Retry on token expiry
+
+        Returns:
+            Dict with 'accessStatus' ('trial', 'pro', 'expired'), 'access' (bool)
+
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails
+        """
+        # Reuse verify_access since it returns current status
+        return self.verify_access(email, retry_auth)
+
+    def get_email_diagnostics(
+        self,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Get email system diagnostics.
+
+        Returns information about email preferences, data availability,
+        and recent email sending history. Useful for debugging why
+        emails may not be received.
+
+        Args:
+            retry_auth: Retry on token expiry
+
+        Returns:
+            Dict with diagnostic information including:
+            - emailPreferences: Current settings
+            - firestoreData: Data availability status
+            - recentSummaries: Recent email history
+            - recommendations: Suggested fixes
+
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails
+        """
+        self._apply_rate_limit()
+
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+
+            response = requests.get(
+                f"{self.backend_url}/v1/reports/email-diagnostics",
+                headers=headers,
+                timeout=self.timeout
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            elif response.status_code == 401:
+                if retry_auth:
+                    self.firebase_auth.refresh_token()
+                    return self.get_email_diagnostics(retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed after token refresh")
+
+            else:
+                raise BackendError(f"Server error: {response.status_code}")
+
+        except requests.Timeout:
+            raise BackendError(f"Request timed out after {self.timeout}s")
+
+        except requests.RequestException as e:
+            raise BackendError(f"Connection error: {e}")
+
+    def force_trigger_email(
+        self,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Force trigger daily email report.
+
+        Bypasses the time-of-day check and immediately attempts to
+        send the daily email report for the current user.
+
+        Args:
+            retry_auth: Retry on token expiry
+
+        Returns:
+            Dict with success status
+
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails
+        """
+        self._apply_rate_limit()
+
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+
+            # Call the trigger endpoint with force=true
+            response = requests.post(
+                f"{self.backend_url}/v1/reports/trigger-daily-emails",
+                json={'force': True},
+                headers=headers,
+                timeout=60  # Longer timeout for email sending
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            elif response.status_code == 401:
+                if retry_auth:
+                    self.firebase_auth.refresh_token()
+                    return self.force_trigger_email(retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed after token refresh")
+
+            else:
+                data = response.json() if response.text else {}
+                raise BackendError(f"Failed to trigger email: {data.get('error', response.status_code)}")
+
+        except requests.Timeout:
+            raise BackendError("Email trigger timed out (this may mean email is still being processed)")
+
+        except requests.RequestException as e:
+            raise BackendError(f"Connection error: {e}")
 
 
 # Convenience function for testing

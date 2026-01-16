@@ -31,6 +31,7 @@ class TelosApp(App):
     current_emoji: reactive[str] = reactive("💤")
     current_color: reactive[str] = reactive("#95a5a6")
     current_app: reactive[str] = reactive("None")
+    current_window_title: reactive[str] = reactive("No window")  # Raw window title (instant)
     current_task: reactive[str] = reactive("No activity")
     last_analysis_source: reactive[str] = reactive("none")  # backend, local, none
     activity_start_time: reactive[Optional[datetime]] = reactive(None)
@@ -202,14 +203,15 @@ class TelosApp(App):
 
             firebase_auth = FirebaseAuth(firebase_api_key)
 
-            firestore_sync = FirestoreSync(
+            # Store firestore_sync as instance variable for status checks
+            self.firestore_sync = FirestoreSync(
                 db=db,
                 firebase_auth=firebase_auth,
                 firebase_project_id=firebase_project_id,
-                sync_interval_hours=24  # Sync once per day
+                # Default: 4-hour interval for reliable email data availability
             )
-            self.firestore_sync_worker_task = asyncio.create_task(firestore_sync.start())
-            print("[APP] Firestore sync worker started")
+            self.firestore_sync_worker_task = asyncio.create_task(self.firestore_sync.start())
+            print("[APP] Firestore sync worker started (4-hour interval)")
 
     async def on_unmount(self) -> None:
         """Called when app is being unmounted (shutdown)."""
