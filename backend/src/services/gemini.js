@@ -15,12 +15,14 @@ import { getScreenshotAnalysisPrompt } from './prompts.js';
 /**
  * Portkey Configuration
  * Reads from environment variables for security.
+ * Optional: If not configured, falls back to direct Gemini API calls.
  */
 const PORTKEY_API_KEY = process.env.PORTKEY_API_KEY;
 const PORTKEY_VIRTUAL_KEY = process.env.PORTKEY_VIRTUAL_KEY;
+const PORTKEY_ENABLED = !!(PORTKEY_API_KEY && PORTKEY_VIRTUAL_KEY);
 
-if (!PORTKEY_API_KEY || !PORTKEY_VIRTUAL_KEY) {
-  throw new Error('PORTKEY_API_KEY and PORTKEY_VIRTUAL_KEY environment variables are required');
+if (!PORTKEY_ENABLED) {
+  console.warn('[GEMINI] Portkey not configured - using direct Gemini API (no observability)');
 }
 
 /**
@@ -28,6 +30,10 @@ if (!PORTKEY_API_KEY || !PORTKEY_VIRTUAL_KEY) {
  */
 let portkeyClient = null;
 function getPortkeyClient(traceId = null, userId = null, contextMetadata = {}) {
+  if (!PORTKEY_ENABLED) {
+    throw new Error('Portkey is not configured. Please set PORTKEY_API_KEY and PORTKEY_VIRTUAL_KEY environment variables.');
+  }
+  
   // Create fresh client with metadata for each call
   return new Portkey({
     apiKey: PORTKEY_API_KEY,

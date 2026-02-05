@@ -9,8 +9,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm install --only=production
+# Install production dependencies only (skip native module compilation)
+RUN npm install --only=production --ignore-scripts
 
 # Copy application code
 COPY src/ ./src/
