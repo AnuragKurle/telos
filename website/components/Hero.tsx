@@ -71,7 +71,7 @@ export function Hero() {
         <p className="text-neutral-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
           Automatic time tracking that shows you what you <em>actually</em> did.
           <br className="hidden md:block" />
-          Data stays on your device. Ask questions in plain English. Zero effort required.
+          Screenshots never stored. Data encrypted. Ask questions in plain English.
         </p>
 
         {/* Email CTA */}
@@ -103,7 +103,7 @@ export function Hero() {
               </>
             ) : (
               <>
-                Get Early Access <ChevronRight className="w-4 h-4" />
+                Get Started <ChevronRight className="w-4 h-4" />
               </>
             )}
           </button>
@@ -114,7 +114,7 @@ export function Hero() {
           </div>
         )}
         <p className="text-xs text-neutral-600 mt-4">
-          Free during beta • No credit card required • Installs in 30 seconds
+          7-day free trial • Then $3/month • Installs in 30 seconds
         </p>
       </div>
 

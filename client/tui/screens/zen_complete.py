@@ -49,8 +49,28 @@ class ZenCompleteScreen(Screen):
     
     #time-label {
         text-align: center;
+        color: $accent;
+        text-style: bold;
+        margin-bottom: 0;
+    }
+    
+    #time-sublabel {
+        text-align: center;
         color: $text;
         margin-bottom: 1;
+    }
+    
+    #time-hint {
+        text-align: center;
+        color: $text-muted;
+        margin-top: 1;
+        text-style: italic;
+    }
+    
+    #privacy-hint {
+        text-align: center;
+        color: $text-muted;
+        text-style: italic;
     }
     
     #time-input-container {
@@ -90,12 +110,18 @@ class ZenCompleteScreen(Screen):
                 yield Static("Now, go do meaningful work.", classes="philosophy-line emphasis")
                 yield Static("We'll be here when you need us.", classes="philosophy-line emphasis")
                 yield Static("", classes="philosophy-line")  # Spacing
+                yield Static("Your free trial is active for 7 days.", classes="philosophy-line")
+                yield Static("After that, Telos Pro is $3/month. Cancel anytime.", classes="philosophy-line")
+                yield Static("", classes="philosophy-line")  # Spacing
                 
                 # Time preference section
                 with Container(id="time-section"):
-                    yield Static("When would you like your daily report?", id="time-label")
+                    yield Static("Daily reports are on by default.", id="time-label")
+                    yield Static("When would you like your email summary?", id="time-sublabel")
                     with Container(id="time-input-container"):
                         yield Input(placeholder="21:00", value="21:00", id="time-input")
+                    yield Static("You can turn this off anytime in Settings.", id="time-hint")
+                    yield Static("Your data is encrypted and not linked to your identity.", id="privacy-hint")
                 
                 # Begin button
                 with Container(id="begin-container"):

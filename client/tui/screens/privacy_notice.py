@@ -68,14 +68,15 @@ class PrivacyNoticeScreen(Screen):
                 with ScrollableContainer(id="privacy-content"):
                     yield Static("Telos is built privacy-first. Here's what that means:", classes="guarantee-item")
                     yield Static("", classes="guarantee-item")
-                    yield Static("✅ Analysis data stored locally on your device", classes="guarantee-item")
-                    yield Static("✅ Only AI analysis metadata sent to backend", classes="guarantee-item")
+                    yield Static("✅ Screenshots are analyzed and immediately discarded", classes="guarantee-item")
+                    yield Static("✅ Activity data is encrypted (AES-256) before storage", classes="guarantee-item")
+                    yield Static("✅ Your data is stored under an anonymous ID, not linked to your email", classes="guarantee-item")
                     yield Static("✅ No tracking, no telemetry, no analytics", classes="guarantee-item")
-                    yield Static("✅ Export your data anytime", classes="guarantee-item")
+                    yield Static("✅ Export or delete your data anytime", classes="guarantee-item")
                     yield Static("", classes="guarantee-item")
                     yield Static("Your data is yours. Always.", classes="guarantee-item")
                     yield Static("", classes="guarantee-item")
-                    yield Static("Read our full Privacy Policy on telos.app", classes="guarantee-item")
+                    yield Static("Read our full Privacy Policy at telos.app/privacy", classes="guarantee-item")
                 
                 with Container(id="button-container"):
                     yield Button("I Understand", variant="success", id="accept-btn")

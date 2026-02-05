@@ -20,24 +20,14 @@ Dodo Payments is an India-friendly payment processor that supports global paymen
 1. Go to https://app.dodopayments.com/products
 2. Click "Add Product"
 
-**Telos Pro Monthly:**
+**Telos Pro:**
 - Type: Subscription
-- Name: "Telos Pro Monthly"
-- Price: $9.00 USD / month
+- Name: "Telos Pro"
+- Price: $3.00 USD / month
 - Copy the Product ID (starts with `pdt_`)
 - Add to `.env`:
   ```
   DODO_PRODUCT_ID_MONTHLY=pdt_xxxxx
-  ```
-
-**Telos Pro Yearly:**
-- Type: Subscription
-- Name: "Telos Pro Yearly"
-- Price: $79.00 USD / year
-- Copy the Product ID
-- Add to `.env`:
-  ```
-  DODO_PRODUCT_ID_YEARLY=pdt_xxxxx
   ```
 
 ### 3. Configure Webhook
@@ -101,7 +91,7 @@ After setup, these endpoints are available:
 ```
 POST /v1/checkout/create-session
 Authorization: Bearer <firebase_token>
-Body: { "plan": "monthly" | "yearly", "email": "user@example.com" }
+Body: { "plan": "monthly", "email": "user@example.com" }
 Response: { "sessionId": "...", "url": "https://checkout.dodopayments.com/..." }
 ```
 

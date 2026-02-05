@@ -28,20 +28,20 @@ export default function PrivacyPolicy() {
                         <section>
                             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
                                 <span className="w-1 h-6 bg-terminal-green rounded-full"></span>
-                                Local-First Data Storage
+                                Screenshots Never Stored
                             </h2>
                             <p className="text-neutral-400 leading-relaxed">
-                                Your data belongs to you. Telos stores your activity logs, screenshots, and productivity metrics locally on your device using a secure SQLite database. We do not maintain a central database of your personal activity.
+                                Your screen content is private. Screenshots are sent securely for AI analysis and discarded immediately after processing. They are never saved, logged, or accessible to anyone — including us. Only text-based activity insights are kept.
                             </p>
                         </section>
 
                         <section>
                             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
                                 <span className="w-1 h-6 bg-terminal-green rounded-full"></span>
-                                No Images Sent to Backend
+                                Encryption &amp; Anonymity
                             </h2>
                             <p className="text-neutral-400 leading-relaxed">
-                                We understand that your screen content is private. Telos processes screenshots locally on your machine to generate metadata and insights. The actual image files never leave your device and are never uploaded to our servers.
+                                All stored activity data is encrypted with AES-256 before it reaches our database. Your data is indexed by anonymous identifiers — not your email or name. Even in our systems, your activity cannot be traced back to your personal identity.
                             </p>
                         </section>
 
@@ -58,10 +58,20 @@ export default function PrivacyPolicy() {
                         <section>
                             <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
                                 <span className="w-1 h-6 bg-terminal-green rounded-full"></span>
-                                User Ownership
+                                You Own Your Data
                             </h2>
                             <p className="text-neutral-400 leading-relaxed">
-                                You have full control over your data. Because everything is stored locally, you can delete your history, export your database, or uninstall the application at any time without leaving a digital footprint on our end.
+                                You have full control over your data. You can delete your history, export your local database, or uninstall the application at any time. Your activity data stored locally in SQLite is always under your control.
+                            </p>
+                        </section>
+
+                        <section>
+                            <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                                <span className="w-1 h-6 bg-terminal-green rounded-full"></span>
+                                Transparent Pricing
+                            </h2>
+                            <p className="text-neutral-400 leading-relaxed">
+                                Telos is $3/month after a 7-day free trial. We make money from subscriptions, not from your data. No hidden fees, no data monetization, no advertising. Your subscription covers AI processing costs and keeps the service running.
                             </p>
                         </section>
                     </div>

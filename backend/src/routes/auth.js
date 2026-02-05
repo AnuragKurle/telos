@@ -175,9 +175,9 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
     // Beta access: Allow all signups (whitelist removed for launch)
     console.log(`[AUTH] Processing trial activation for: ${safeEmail}`);
 
-    // 2. Fetch or Create User Document
+    // 2. Fetch or Create User Document (keyed by UID for anonymity)
     const db = admin.firestore();
-    const userRef = db.collection('users').doc(safeEmail);
+    const userRef = db.collection('users').doc(uid);
     const userDoc = await userRef.get();
 
     let accessStatus = 'trial'; // Default for new users
@@ -284,10 +284,11 @@ router.post('/record-payment-intent', verifyFirebaseToken, async (req, res) => {
     }
 
     const db = admin.firestore();
-    const userRef = db.collection('users').doc(email);
+    const userRef = db.collection('users').doc(uid);
 
     // Use set with merge to create if missing (though they should be in trial)
     await userRef.set({
+      email: email.toLowerCase().trim(),
       paymentIntent: {
         hasRequestedUpgrade: true,
         requestedAt: admin.firestore.FieldValue.serverTimestamp(),

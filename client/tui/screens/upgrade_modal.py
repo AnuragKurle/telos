@@ -64,7 +64,7 @@ class UpgradeModal(ModalScreen):
                 yield Static("\nSupport indie development!", classes="benefit")
                 
                 with Horizontal(id="buttons"):
-                    yield Button("I'm Interested ($9/mo)", variant="success", id="upgrade-btn")
+                    yield Button("Upgrade ($3/mo)", variant="success", id="upgrade-btn")
                     yield Button("Maybe Later", variant="default", id="cancel-btn")
                     
     def on_button_pressed(self, event: Button.Pressed) -> None:

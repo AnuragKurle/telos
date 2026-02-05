@@ -160,7 +160,7 @@ class WelcomeCarouselScreen(Screen):
                 with Container(id="button-container"):
                     yield Button("Get Started", variant="success", id="continue-btn")
                 
-                yield Static("Part of the Beta Program", id="beta-notice")
+                yield Static("7-day free trial · no credit card needed", id="beta-notice")
     
     def watch_current_slide(self, new_slide: int) -> None:
         """Update displayed slide when current_slide changes."""

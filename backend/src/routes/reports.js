@@ -7,6 +7,12 @@ import { verifyFirebaseToken } from '../middleware/auth.js';
 import admin from 'firebase-admin';
 import sgMail from '@sendgrid/mail';
 import { getSecret } from '../services/secrets.js';
+import { encrypt, decrypt, encryptFields, decryptFields, encryptJSON, decryptJSON } from '../services/encryption.js';
+import { DateTime } from 'luxon';
+
+// Fields in daily_summaries that contain sensitive user activity data
+const SUMMARY_ENCRYPT_FIELDS = ['daily_narrative', 'key_learnings_json', 'apps', 'timeline', 'deep_work_sessions', 'userEmail'];
+const SUMMARY_JSON_FIELDS = ['apps', 'timeline', 'deep_work_sessions'];
 
 const router = express.Router();
 
@@ -95,17 +101,23 @@ router.post('/daily-summary', verifyFirebaseToken, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const userEmail = usersSnapshot.docs[0].id;
+        const userEmail = usersSnapshot.docs[0].data().email || usersSnapshot.docs[0].id;
+
+        // Encrypt sensitive fields before storing
+        const encryptedSummary = typeof summary === 'object' ? { ...summary } : summary;
+        if (typeof encryptedSummary === 'object') {
+            encryptFields(encryptedSummary, SUMMARY_ENCRYPT_FIELDS);
+        }
 
         // Store summary in Firestore
         const summaryRef = db.collection('daily_summaries').doc();
         await summaryRef.set({
             userId: uid,
-            userEmail: userEmail,
+            userEmail: encrypt(userEmail),
             date: date,
             uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
             emailSent: false,
-            summary: summary
+            summary: encryptedSummary
         });
 
         console.log(`[REPORTS] Summary uploaded for ${userEmail} on ${date}`);
@@ -142,9 +154,17 @@ router.get('/daily-summary/:date', verifyFirebaseToken, async (req, res) => {
         }
 
         const doc = snapshot.docs[0];
+        const data = doc.data();
+
+        // Decrypt sensitive fields
+        if (data.userEmail) data.userEmail = decrypt(data.userEmail);
+        if (data.summary && typeof data.summary === 'object') {
+            decryptFields(data.summary, SUMMARY_ENCRYPT_FIELDS, SUMMARY_JSON_FIELDS);
+        }
+
         return res.json({
             reportId: doc.id,
-            ...doc.data()
+            ...data
         });
 
     } catch (error) {
@@ -297,7 +317,7 @@ router.get('/email-diagnostics', verifyFirebaseToken, async (req, res) => {
         }
 
         const userData = usersSnapshot.docs[0].data();
-        const userEmail = usersSnapshot.docs[0].id;
+        const userEmail = userData.email || usersSnapshot.docs[0].id;
         const emailPrefs = userData.emailReports || {};
 
         // Get recent summaries
@@ -340,19 +360,18 @@ router.get('/email-diagnostics', verifyFirebaseToken, async (req, res) => {
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-        // Calculate target time
+        // Calculate target time using luxon for proper DST handling
         const timezone = emailPrefs.timezone || 'UTC';
         const preferredHour = emailPrefs.preferredHour || 9;
-        const timezoneOffsets = {
-            'UTC': 0, 'America/New_York': -5, 'America/Los_Angeles': -8,
-            'America/Chicago': -6, 'America/Denver': -7, 'Europe/London': 0,
-            'Europe/Paris': 1, 'Europe/Berlin': 1, 'Asia/Kolkata': 5.5,
-            'Asia/Tokyo': 9, 'Asia/Shanghai': 8, 'Australia/Sydney': 11
-        };
-        const offset = timezoneOffsets[timezone] || 0;
-        let targetUTCHour = preferredHour - offset;
-        if (targetUTCHour < 0) targetUTCHour += 24;
-        if (targetUTCHour >= 24) targetUTCHour -= 24;
+        let targetUTCHour;
+        try {
+            const nowInTZ = DateTime.now().setZone(timezone);
+            const preferredLocal = nowInTZ.set({ hour: preferredHour, minute: 0, second: 0 });
+            const preferredUTC = preferredLocal.toUTC();
+            targetUTCHour = preferredUTC.hour;
+        } catch (e) {
+            targetUTCHour = preferredHour; // Fallback for invalid timezone
+        }
 
         const diagnostics = {
             timestamp: now.toISOString(),

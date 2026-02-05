@@ -34,13 +34,8 @@ function getDodoClient() {
 const PRODUCTS = {
     monthly: {
         productId: process.env.DODO_PRODUCT_ID_MONTHLY,  // e.g., 'pdt_xxxxx'
-        name: 'Telos Pro Monthly',
-        priceDisplay: '$9/month',
-    },
-    yearly: {
-        productId: process.env.DODO_PRODUCT_ID_YEARLY,   // e.g., 'pdt_xxxxx'
-        name: 'Telos Pro Yearly',
-        priceDisplay: '$79/year',
+        name: 'Telos Pro',
+        priceDisplay: '$3/month',
     }
 };
 
@@ -177,22 +172,30 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
                     console.log(`[WEBHOOK] Payment successful for ${customerEmail}, plan: ${plan}`);
 
-                    // Update user to Pro status in Firestore
+                    // Update user to Pro status in Firestore (look up by email field)
                     const db = admin.firestore();
-                    const userRef = db.collection('users').doc(customerEmail.toLowerCase());
+                    const usersSnapshot = await db.collection('users')
+                        .where('email', '==', customerEmail.toLowerCase())
+                        .limit(1)
+                        .get();
 
-                    await userRef.set({
-                        accessStatus: 'pro',
-                        subscription: {
-                            plan: plan,
-                            provider: 'dodo_payments',
-                            subscriptionId: data.subscription_id || data.id,
-                            customerId: data.customer_id || data.customer?.id,
-                            activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            status: 'active'
-                        },
-                        upgradedAt: admin.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
+                    if (!usersSnapshot.empty) {
+                        const userRef = usersSnapshot.docs[0].ref;
+                        await userRef.set({
+                            accessStatus: 'pro',
+                            subscription: {
+                                plan: plan,
+                                provider: 'dodo_payments',
+                                subscriptionId: data.subscription_id || data.id,
+                                customerId: data.customer_id || data.customer?.id,
+                                activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                                status: 'active'
+                            },
+                            upgradedAt: admin.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    } else {
+                        console.warn(`[WEBHOOK] User not found for email: ${customerEmail}`);
+                    }
 
                     console.log(`[WEBHOOK] User ${customerEmail} upgraded to Pro`);
 
@@ -214,13 +217,18 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
                     if (customerEmail) {
                         const db = admin.firestore();
-                        const userRef = db.collection('users').doc(customerEmail.toLowerCase());
+                        const cancelSnapshot = await db.collection('users')
+                            .where('email', '==', customerEmail.toLowerCase())
+                            .limit(1)
+                            .get();
 
-                        await userRef.update({
-                            accessStatus: 'expired',
-                            'subscription.status': 'canceled',
-                            'subscription.canceledAt': admin.firestore.FieldValue.serverTimestamp()
-                        });
+                        if (!cancelSnapshot.empty) {
+                            await cancelSnapshot.docs[0].ref.update({
+                                accessStatus: 'expired',
+                                'subscription.status': 'canceled',
+                                'subscription.canceledAt': admin.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
 
                         console.log(`[WEBHOOK] Subscription canceled for ${customerEmail}`);
                     }

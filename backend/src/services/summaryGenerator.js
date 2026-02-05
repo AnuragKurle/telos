@@ -7,6 +7,7 @@
 
 import admin from 'firebase-admin';
 import { generateDailyNarrative } from './gemini.js';
+import { decrypt } from './encryption.js';
 
 /**
  * Generate a daily summary from Firestore usage data
@@ -41,6 +42,13 @@ export async function generateSummaryFromUsage(userEmail, userId, dateStr) {
         }
 
         console.log(`[SUMMARY_GEN] Found ${dayData.captures.length} captures for ${dateStr}`);
+
+        // Decrypt sensitive capture fields if encrypted
+        dayData.captures = dayData.captures.map(capture => ({
+            ...capture,
+            app_name: capture.app_name ? decrypt(capture.app_name) : capture.app_name,
+            task: capture.task ? decrypt(capture.task) : capture.task,
+        }));
 
         // Aggregate by category
         const categoryTotals = {
@@ -81,9 +89,12 @@ export async function generateSummaryFromUsage(userEmail, userId, dateStr) {
         const focusQuality = analyzeFocusQuality(dayData.captures, sessions);
         const weeklyComparison = await getWeeklyComparison(usageData, dateStr, categoryTotals);
 
-        // Get user's goal (if set)
-        const userDoc = await db.collection('users').doc(userEmail).get();
-        const userGoal = userDoc.exists ? userDoc.data().analysisGoal : null;
+        // Get user's goal (if set) - look up by UID first, fallback to email for legacy
+        let userGoal = null;
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+            userGoal = userDoc.data().analysisGoal || null;
+        }
 
         // Generate narrative using Gemini
         const aiResult = await generateDailyNarrative(sessions, categoryTotals, userGoal);

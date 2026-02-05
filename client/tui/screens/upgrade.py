@@ -117,17 +117,12 @@ class UpgradeScreen(Screen):
                 with Container(classes="pricing-tier"):
                     yield Static("🆓 Free Trial", classes="tier-name")
                     yield Static("7 days, all features", classes="tier-price")
-                    yield Static("Perfect for trying Telos", classes="tier-features")
+                    yield Static("No credit card required", classes="tier-features")
                 
                 with Container(classes="pricing-tier"):
-                    yield Static("⭐ Pro Monthly", classes="tier-name")
-                    yield Static("$9/month", classes="tier-price")
-                    yield Static("Unlimited tracking • Priority support", classes="tier-features")
-                
-                with Container(classes="pricing-tier"):
-                    yield Static("💎 Pro Yearly", classes="tier-name")
-                    yield Static("$79/year (save 26%)", classes="tier-price")
-                    yield Static("Best value • All features • Cancel anytime", classes="tier-features")
+                    yield Static("⭐ Telos Pro", classes="tier-name")
+                    yield Static("$3/month", classes="tier-price")
+                    yield Static("Unlimited tracking • Priority support • Cancel anytime", classes="tier-features")
                 
                 with Container(id="button-container"):
                     yield Button("Upgrade Now", variant="success", id="upgrade-btn")
@@ -163,9 +158,7 @@ class UpgradeScreen(Screen):
             
             backend = BackendClient(backend_url, firebase_api_key)
             
-            # TODO: Add plan selection UI (monthly vs yearly)
-            # For now, default to yearly
-            plan = 'yearly'
+            plan = 'monthly'
             
             # Create checkout session
             response = backend.create_checkout_session(plan=plan, email=email)

@@ -15,6 +15,8 @@ import feedbackRoutes from './routes/feedback.js';
 import reportsRoutes from './routes/reports.js';
 import checkoutRoutes from './routes/checkout.js';
 import { startScheduler } from './services/scheduler.js';
+import { initializeEncryption } from './services/encryption.js';
+import { initializeSendGrid } from './services/email.js';
 import {
   initializeSentry,
   getRequestHandler,
@@ -28,6 +30,18 @@ dotenv.config();
 
 // Initialize Firebase Admin SDK
 initializeFirebase();
+
+// Initialize encryption (loads key from Secret Manager)
+initializeEncryption().catch(err => {
+  console.warn('[STARTUP] Encryption initialization deferred:', err.message);
+});
+
+// Initialize SendGrid email service
+initializeSendGrid().then(() => {
+  console.log('[STARTUP] SendGrid ready');
+}).catch(err => {
+  console.warn('[STARTUP] SendGrid initialization deferred:', err.message);
+});
 
 // Start Background Scheduler
 startScheduler();

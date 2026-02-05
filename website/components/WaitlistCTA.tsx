@@ -38,14 +38,14 @@ export function WaitlistCTA() {
             <div className="max-w-2xl mx-auto text-center">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-terminal-green/10 border border-terminal-green/20 text-terminal-green text-sm font-medium mb-6">
                     <Users className="w-4 h-4" />
-                    <span>Join 80+ people on the waitlist</span>
+                    <span>Trusted by early adopters</span>
                 </div>
 
                 <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                    Ready to Know Where Your Time Goes?
+                    Ready to Take Control of Your Time?
                 </h2>
                 <p className="text-neutral-400 mb-8 max-w-lg mx-auto">
-                    Get early access to Telos. Free during beta, no credit card required.
+                    Try Telos free for 7 days. Then $3/month. Cancel anytime.
                 </p>
 
                 <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center items-center max-w-md mx-auto w-full">
@@ -73,7 +73,7 @@ export function WaitlistCTA() {
                             </>
                         ) : (
                             <>
-                                Get Early Access <ChevronRight className="w-4 h-4" />
+                                Start Your Free Trial <ChevronRight className="w-4 h-4" />
                             </>
                         )}
                     </button>
@@ -86,7 +86,7 @@ export function WaitlistCTA() {
                 )}
 
                 <p className="text-xs text-neutral-600 mt-6">
-                    We'll email you when it's ready. No spam, just product updates.
+                    Install in 30 seconds. No credit card required to start.
                 </p>
             </div>
         </section>

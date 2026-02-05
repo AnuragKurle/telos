@@ -24,8 +24,8 @@ export function Features() {
       icon: Mail
     },
     {
-      title: "100% Private",
-      description: "Your work history lives only on your machine. Zero cloud uploads, zero data collection.",
+      title: "Privacy First",
+      description: "Screenshots never stored. Activity insights encrypted. No third-party tracking, no data selling.",
       icon: Shield
     },
     {

@@ -15,8 +15,8 @@ initializeFirebase();
 const db = getFirestore();
 
 async function createUserDocument() {
-    const email = 'anurag@userology.co';
-    const uid = 'DuysxZoYCsgnTd4B8H2bToTcSCG2';  // From usage collection
+    const email = process.argv[2] || 'anurag@userology.co';
+    const uid = process.argv[3] || 'UQgcLrVEb5bQl7d1aBhSSGzXNCD2';  // Default or from args
 
     console.log(`\n📧 Creating user document for: ${email}`);
 
@@ -28,8 +28,9 @@ async function createUserDocument() {
         console.log('⚠️  User document already exists!');
         console.log('📄 Current data:', JSON.stringify(existing.data(), null, 2));
 
-        // Update with email reports enabled
+        // Update with email reports enabled and fix accessStatus
         await userRef.update({
+            'accessStatus': 'pro',  // Critical: this is the field auth.js checks
             'emailReports.enabled': true,
             'emailReports.timezone': 'Asia/Kolkata',
             'emailReports.preferredHour': 21,
@@ -47,6 +48,9 @@ async function createUserDocument() {
         // Identity
         email: email,
         uid: uid,
+
+        // Access Status (critical: this is what auth.js checks)
+        accessStatus: 'pro',
 
         // Status & Plan
         status: 'active',

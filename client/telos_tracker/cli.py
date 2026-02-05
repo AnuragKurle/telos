@@ -555,17 +555,19 @@ def interactive_setup():
     config_content = config_path.read_text()
     config = yaml.safe_load(config_content)
     
-    # Ask if user wants to use backend (SaaS mode) or local mode
-    print("Choose your setup mode:\n")
-    print("1. SaaS Mode (Recommended) - Use our backend, no API key needed")
-    print("2. Local Mode - Use your own Gemini API key")
+    # Ask how the user wants to run Telos
+    print("How would you like to use Telos?\n")
+    print("1. Just get it running (Recommended) - We handle the AI, you just track")
+    print("   Includes a 7-day free trial, then $3/month. Cancel anytime.")
+    print()
+    print("2. Bring your own API key - Use your own Gemini API key (free tier available)")
     print()
     
     mode = input("Enter choice (1 or 2) [1]: ").strip() or "1"
     
     if mode == "1":
-        # SaaS mode - enable backend
-        print("\n[OK] Configuring SaaS mode...")
+        # Cloud mode - enable backend
+        print("\n[OK] Setting things up...")
         config['backend']['enabled'] = True
         config['backend']['url'] = "https://telos-backend-ae7k4avtpq-el.a.run.app"
         config['backend']['fallback_to_local'] = False
@@ -579,11 +581,12 @@ def interactive_setup():
         config['firebase']['auth_domain'] = "gen-lang-client-0772617718.firebaseapp.com"
         config['firebase']['project_id'] = "gen-lang-client-0772617718"
         
-        print("[OK] Backend configured: https://telos-backend-ae7k4avtpq-el.a.run.app")
+        print("[OK] You're all set!")
+        print("     Your 7-day free trial starts now. After that, it's $3/month. Cancel anytime.")
     else:
         # Local mode - prompt for API key
-        print("\n[Local Mode] You'll need a Gemini API key")
-        print("Get one from: https://aistudio.google.com/app/apikey\n")
+        print("\n    You'll need a free Gemini API key.")
+        print("    Get one from: https://aistudio.google.com/app/apikey\n")
         
         api_key = input("Enter your Gemini API key: ").strip()
         

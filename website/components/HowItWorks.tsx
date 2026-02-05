@@ -28,13 +28,13 @@ export function HowItWorks() {
     const privacyFeatures = [
         {
             icon: ShieldCheck,
-            title: "Data Deleted Instantly",
-            description: "Activity data is processed and immediately removed. Never stored permanently."
+            title: "Screenshots Never Stored",
+            description: "Screenshots are analyzed in real-time and discarded immediately. Only text-based insights are kept."
         },
         {
             icon: Lock,
-            title: "Data Never Leaves Your Device",
-            description: "Everything is stored locally in SQLite. No cloud sync, no data harvesting."
+            title: "Your Data, Your Control",
+            description: "Activity insights are encrypted with AES-256 and stored under anonymous identifiers — never linked to your account."
         },
         {
             icon: Database,
@@ -92,7 +92,7 @@ export function HowItWorks() {
                     <div className="text-center mb-12">
                         <h2 className="text-3xl font-bold mb-4">Your Privacy is <span className="text-terminal-green">Non-Negotiable</span></h2>
                         <p className="text-neutral-400 max-w-xl mx-auto">
-                            We built Telos for people who care about their data. That means keeping everything local and in your control.
+                            We built Telos for people who care about their data. That means encryption, anonymity, and full transparency.
                         </p>
                     </div>
 

@@ -2,7 +2,7 @@ import { Hero } from "@/components/Hero";
 import { Features } from "@/components/Features";
 import { HowItWorks } from "@/components/HowItWorks";
 import { WaitlistCTA } from "@/components/WaitlistCTA";
-import { Terminal, Twitter } from "lucide-react";
+import { Terminal } from "lucide-react";
 
 export default function Home() {
   return (
@@ -18,7 +18,7 @@ export default function Home() {
             href="#waitlist"
             className="px-4 py-2 text-sm font-medium text-terminal-green border border-terminal-green/30 rounded-md hover:bg-terminal-green/10 transition-colors"
           >
-            Get Early Access
+            Get Started
           </a>
         </div>
       </header>
@@ -41,11 +41,6 @@ export default function Home() {
             <span className="text-sm">© {new Date().getFullYear()} Telos. Know where your time goes.</span>
           </div>
 
-          <div className="flex items-center gap-6">
-            <a href="#" className="text-neutral-500 hover:text-white transition-colors">
-              <Twitter className="w-5 h-5" />
-            </a>
-          </div>
           <div className="flex items-center gap-6 mt-4 md:mt-0">
             <a href="/privacy" className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors">
               Privacy Policy
