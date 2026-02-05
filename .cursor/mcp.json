@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "telos": {
+      "command": "python",
+      "args": [
+        "d:\\Experiments\\screentracker\\client\\mcp_server.py"
+      ]
+    }
+  }
+}

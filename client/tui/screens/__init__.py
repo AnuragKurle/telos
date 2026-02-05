@@ -16,6 +16,7 @@ from .upgrade import UpgradeScreen
 from .help import HelpScreen
 from .feedback_modal import FeedbackModal
 from .upgrade_modal import UpgradeModal
+from .welcome_pro import WelcomeProScreen
 
 __all__ = [
     'DashboardScreen', 
@@ -34,4 +35,5 @@ __all__ = [
     'HelpScreen',
     'FeedbackModal',
     'UpgradeModal',
+    'WelcomeProScreen',
 ]

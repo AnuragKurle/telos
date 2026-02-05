@@ -14,12 +14,20 @@ export default function Home() {
             <Terminal className="w-6 h-6 text-terminal-green" />
             <span>telos</span>
           </div>
-          <a
-            href="#waitlist"
-            className="px-4 py-2 text-sm font-medium text-terminal-green border border-terminal-green/30 rounded-md hover:bg-terminal-green/10 transition-colors"
-          >
-            Get Started
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href="/mcp"
+              className="px-3 py-2 text-sm font-medium text-neutral-400 hover:text-white transition-colors"
+            >
+              MCP Server
+            </a>
+            <a
+              href="#waitlist"
+              className="px-4 py-2 text-sm font-medium text-terminal-green border border-terminal-green/30 rounded-md hover:bg-terminal-green/10 transition-colors"
+            >
+              Get Started
+            </a>
+          </div>
         </div>
       </header>
 
@@ -42,6 +50,9 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-6 mt-4 md:mt-0">
+            <a href="/mcp" className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors">
+              MCP Server
+            </a>
             <a href="/privacy" className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors">
               Privacy Policy
             </a>

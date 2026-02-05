@@ -68,8 +68,27 @@ class DayHeatmap(Widget):
         self.expanded = not self.expanded
         
     def previous_day(self):
-        """Go to previous day (called by parent screen)."""
-        self.selected_date = self.selected_date - timedelta(days=1)
+        """Go to previous day (called by parent screen).
+        
+        Expired trial users are limited to 7 days of history.
+        """
+        from core.trial_manager import TrialManager
+        trial_manager = TrialManager(self.app.config)
+        
+        new_date = self.selected_date - timedelta(days=1)
+        
+        if trial_manager.is_trial_expired() and not trial_manager.is_pro():
+            # Limit to 7 days back from today
+            cutoff = datetime.now().date() - timedelta(days=7)
+            if new_date < cutoff:
+                self.app.notify(
+                    "History beyond 7 days is available with Pro. Your data is preserved.",
+                    severity="warning",
+                    timeout=5
+                )
+                return
+        
+        self.selected_date = new_date
         
     def next_day(self):
         """Go to next day (called by parent screen)."""

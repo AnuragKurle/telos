@@ -351,6 +351,126 @@ class TrialManager:
         self.config.config['account'] = account_config
         self.config.save(self.config.config)
 
+    # ── Contextual nudges ──────────────────────────────────────────────
+
+    def get_contextual_nudge(self, context: str = "general", session_count: int = 0) -> Optional[str]:
+        """Get a contextual micro-nudge message if appropriate.
+        
+        Only returns nudges for active trial users (day 5+). Pro users and
+        early trial users (day 1-4) never see nudges.
+        
+        Args:
+            context: Where the nudge would appear ("summary", "dashboard", "milestone")
+            session_count: Total sessions tracked so far (for milestone nudges)
+            
+        Returns:
+            Nudge message string or None
+        """
+        status = self.get_trial_status()
+        
+        # No nudges for Pro or expired users
+        if status != TrialStatus.ACTIVE:
+            return None
+        
+        days_remaining = self.get_days_remaining()
+        
+        # Day 1-4: Zero nudges. Let the user fall in love with the product.
+        if days_remaining > 3:
+            return None
+        
+        # Check if this specific nudge was already shown this session
+        nudge_key = f"nudge_{context}_{days_remaining}"
+        if self._was_nudge_shown_this_session(nudge_key):
+            return None
+        
+        nudge = None
+        
+        # Session milestone nudge (50 sessions)
+        if context == "milestone" and session_count > 0 and session_count % 50 == 0:
+            nudge = f"You've tracked {session_count} sessions! Pro users get unlimited history."
+            self._record_nudge_shown(nudge_key)
+            return nudge
+        
+        # Day 5 (2 days left): Subtle informational note
+        if days_remaining == 2 and context == "summary":
+            nudge = "Your trial has 2 days left. Your tracking data is safe."
+            self._record_nudge_shown(nudge_key)
+            return nudge
+        
+        # Day 6 (1 day left): Last day reassurance
+        if days_remaining == 1 and context == "dashboard":
+            nudge = "Last day of your trial. Your tracking data is preserved."
+            self._record_nudge_shown(nudge_key)
+            return nudge
+        
+        # After a good summary: subtle attribution (only day 5-6)
+        if context == "summary" and days_remaining <= 2:
+            nudge = "Track trends over months with Pro."
+            self._record_nudge_shown(nudge_key)
+            return nudge
+        
+        return nudge
+    
+    def get_post_expiry_nudge(self) -> Optional[str]:
+        """Get a post-expiry nudge for returning users.
+        
+        Shows a non-blocking toast every 3rd app launch after expiry.
+        
+        Returns:
+            Nudge message string or None
+        """
+        status = self.get_trial_status()
+        if status != TrialStatus.EXPIRED:
+            return None
+        
+        # Track app launches since expiry
+        trial_config = self.config.config.get('trial', {})
+        launches_since_expiry = trial_config.get('launches_since_expiry', 0) + 1
+        trial_config['launches_since_expiry'] = launches_since_expiry
+        self.config.config['trial'] = trial_config
+        self.config.save(self.config.config)
+        
+        # Show nudge every 3rd launch (not the first -- that gets the full-screen)
+        if launches_since_expiry > 1 and launches_since_expiry % 3 == 0:
+            return "Miss tracking? Upgrade for $3/mo to pick up where you left off."
+        
+        return None
+    
+    def _was_nudge_shown_this_session(self, nudge_key: str) -> bool:
+        """Check if a nudge was already shown in this app session (today).
+        
+        Args:
+            nudge_key: Unique key for the nudge
+            
+        Returns:
+            True if nudge was shown today
+        """
+        trial_config = self.config.config.get('trial', {})
+        nudges_shown = trial_config.get('nudges_shown', {})
+        
+        last_shown_str = nudges_shown.get(nudge_key)
+        if not last_shown_str:
+            return False
+        
+        try:
+            last_shown = datetime.fromisoformat(last_shown_str)
+            return last_shown.date() == datetime.now().date()
+        except ValueError:
+            return False
+    
+    def _record_nudge_shown(self, nudge_key: str) -> None:
+        """Record that a nudge was shown.
+        
+        Args:
+            nudge_key: Unique key for the nudge
+        """
+        trial_config = self.config.config.get('trial', {})
+        if 'nudges_shown' not in trial_config:
+            trial_config['nudges_shown'] = {}
+        trial_config['nudges_shown'][nudge_key] = datetime.now().isoformat()
+        self.config.config['trial'] = trial_config
+        self.config.save(self.config.config)
+
     def refresh_account_status(self, backend_url: str, firebase_api_key: str) -> bool:
         """Sync account status from backend.
         

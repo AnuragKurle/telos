@@ -8,7 +8,7 @@ from pathlib import Path
 from core.database import Database
 from core.analyzer import GeminiAnalyzer, RateLimitError
 from core.capture import ActivityMonitor, ScreenshotCapture, WindowMonitor, WindowEventTracker
-from core.backend_client import BackendClient, BackendError
+from core.backend_client import BackendClient, BackendError, SubscriptionError
 from core.fallback_handler import FallbackHandler, FallbackMode
 from utils.hash_utils import ScreenshotHasher
 
@@ -275,6 +275,18 @@ async def capture_worker_task(app):
                         app.current_color = result.get('category_color', '#95a5a6')
                         app.current_task = result['task']
                         app.last_analysis_source = result.get('_source', 'local')
+
+                except SubscriptionError as e:
+                    # Trial expired server-side -- stop capture loop gracefully
+                    app.loop_status = "stopped"
+                    app.error_message = "Subscription expired"
+                    app.notify(
+                        "Trial expired. Tracking stopped. Upgrade to continue.",
+                        severity="warning",
+                        timeout=10
+                    )
+                    await asyncio.to_thread(capturer.cleanup_screenshot, screenshot_path)
+                    return  # Exit the capture worker entirely
 
                 except RateLimitError as e:
                     app.loop_status = "rate_limited"

@@ -30,6 +30,13 @@ class AuthenticationError(BackendError):
     pass
 
 
+class SubscriptionError(BackendError):
+    """Raised when subscription check fails (trial expired, no subscription)."""
+    def __init__(self, message: str, access_status: str = 'expired'):
+        super().__init__(message)
+        self.access_status = access_status
+
+
 class BackendClient:
     """Client for Telos backend API."""
     
@@ -186,6 +193,22 @@ class BackendClient:
                     return self.analyze_screenshot(image_path, previous_captures, context_metadata, retry_auth=False)
                 else:
                     raise AuthenticationError("Authentication failed after token refresh")
+            
+            elif response.status_code == 403:
+                # Subscription check failed (trial expired, no access)
+                try:
+                    data = response.json()
+                    error_code = data.get('code', '')
+                    access_status = data.get('accessStatus', 'expired')
+                    error_msg = data.get('message', 'Access denied')
+                except Exception:
+                    error_code = 'UNKNOWN'
+                    access_status = 'expired'
+                    error_msg = 'Access denied'
+                
+                if error_code in ('TRIAL_EXPIRED', 'NO_SUBSCRIPTION'):
+                    raise SubscriptionError(error_msg, access_status)
+                raise BackendError(f"Access denied: {error_msg}")
             
             elif response.status_code == 429:
                 # Rate limit exceeded

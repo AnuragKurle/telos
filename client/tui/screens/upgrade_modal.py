@@ -127,19 +127,32 @@ class UpgradeModal(ModalScreen):
         self.dismiss(True)
     
     def _schedule_status_refresh(self) -> None:
-        """Schedule a delayed status refresh after checkout."""
+        """Schedule delayed status refresh attempts after checkout.
+        
+        Polls at increasing intervals: 15s, 30s, 60s, 120s.
+        Payment processing can take anywhere from a few seconds to a couple minutes.
+        """
         import asyncio
         
-        async def delayed_refresh():
-            """Wait then refresh status."""
-            await asyncio.sleep(15)  # Wait for payment processing
-            await self._refresh_and_notify()
+        async def poll_for_upgrade():
+            """Poll backend for upgrade status with backoff."""
+            delays = [15, 30, 60, 120]
+            for delay in delays:
+                await asyncio.sleep(delay)
+                upgraded = await self._refresh_and_check()
+                if upgraded:
+                    return
+            # After all retries, give up silently
+            print("[UPGRADE] Payment not detected after polling. User may need to restart.")
         
-        # Schedule the refresh
-        asyncio.create_task(delayed_refresh())
+        asyncio.create_task(poll_for_upgrade())
     
-    async def _refresh_and_notify(self) -> None:
-        """Refresh account status and notify if upgraded."""
+    async def _refresh_and_check(self) -> bool:
+        """Refresh account status and update UI if upgraded.
+        
+        Returns:
+            True if user is now Pro, False otherwise.
+        """
         import asyncio
         from core.trial_manager import TrialManager
         
@@ -149,7 +162,7 @@ class UpgradeModal(ModalScreen):
             firebase_api_key = config.get('firebase', 'api_key', default='')
             
             if not backend_url or not firebase_api_key:
-                return
+                return False
             
             trial_manager = TrialManager(config)
             
@@ -161,14 +174,52 @@ class UpgradeModal(ModalScreen):
             )
             
             if result and trial_manager.is_pro():
+                # Notify user of successful upgrade
                 self.app.notify(
-                    "🎉 Welcome to Pro! Restart for full access.",
+                    "Welcome to Telos Pro! All features are now unlocked.",
                     severity="information",
                     timeout=10
                 )
+                
+                # Refresh the app UI state in-place
+                self._apply_pro_ui_refresh()
+                
+                # Mark that we should show the Pro welcome on next screen switch
+                config.config.setdefault('account', {})['show_pro_welcome'] = True
+                config.save(config.config)
+                
+                return True
+            return False
         except Exception as e:
-            # Silently fail - this is a best-effort refresh
             print(f"[UPGRADE] Status refresh failed: {e}")
+            return False
+    
+    def _apply_pro_ui_refresh(self) -> None:
+        """Update all visible UI elements to reflect Pro status."""
+        try:
+            # Refresh the status banner if visible
+            from tui.widgets.status_banner import StatusBanner
+            for banner in self.app.query(StatusBanner):
+                banner.refresh_status()
+            
+            # Refresh the dashboard's upgrade binding visibility
+            from tui.screens.dashboard import DashboardScreen
+            for screen in self.app.screen_stack:
+                if isinstance(screen, DashboardScreen):
+                    screen._update_upgrade_binding()
+                    break
+            
+            # If workers weren't started (expired trial), start them now
+            if not self.app.capture_worker or self.app.capture_worker.done():
+                import asyncio
+                from tui.workers import capture_worker_task, db_polling_worker
+                from tui.workers.session_worker import session_worker_task
+                self.app.capture_worker = asyncio.create_task(capture_worker_task(self.app))
+                self.app.db_worker = asyncio.create_task(db_polling_worker(self.app))
+                self.app.session_worker = asyncio.create_task(session_worker_task(self.app))
+                self.app.loop_status = "active"
+        except Exception as e:
+            print(f"[UPGRADE] UI refresh error: {e}")
 
 class UpgradeSuccessModal(ModalScreen):
     """Simple acknowledgement modal."""

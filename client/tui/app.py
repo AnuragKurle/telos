@@ -11,7 +11,7 @@ from tui.workers import capture_worker_task, db_polling_worker
 from tui.workers.session_worker import session_worker_task
 from tui.screens import (
     DashboardScreen, TimelineScreen, SummaryScreen, SettingsScreen, ChatScreen,
-    HelpScreen, UpgradeScreen
+    HelpScreen, UpgradeScreen, WelcomeProScreen
 )
 from tui.widgets import TrialBanner
 from core.trial_manager import TrialManager
@@ -133,13 +133,19 @@ class TelosApp(App):
             except Exception as e:
                 print(f"[APP] Failed to sync account status: {e}")
         
+        # Show one-time Pro welcome screen if user just upgraded
+        show_pro_welcome = self.config.config.get('account', {}).get('show_pro_welcome', False)
+        if show_pro_welcome and self.trial_manager.is_pro():
+            self.set_timer(1.5, lambda: self.push_screen(WelcomeProScreen()))
+        
         # Check if trial is expired - enforce restrictions
         is_expired = self.trial_manager.is_trial_expired()
         
-        # Check for upgrade prompts
-        prompt_type = self.trial_manager.should_show_upgrade_prompt()
-        if prompt_type or is_expired:
-            self.set_timer(2, lambda: self.push_screen(UpgradeScreen(self.trial_manager)))
+        # Check for upgrade prompts (skip if Pro)
+        if not self.trial_manager.is_pro():
+            prompt_type = self.trial_manager.should_show_upgrade_prompt()
+            if prompt_type or is_expired:
+                self.set_timer(2, lambda: self.push_screen(UpgradeScreen(self.trial_manager)))
 
         # Only start workers if trial is active or user is Pro
         if is_expired:
@@ -148,6 +154,12 @@ class TelosApp(App):
                 severity="warning",
                 timeout=10
             )
+            # Show subtle post-expiry nudge on every 3rd launch
+            post_expiry_nudge = self.trial_manager.get_post_expiry_nudge()
+            if post_expiry_nudge:
+                self.set_timer(5, lambda: self.notify(
+                    post_expiry_nudge, severity="information", timeout=8
+                ))
             return  # Don't start workers
 
         # Start background workers
