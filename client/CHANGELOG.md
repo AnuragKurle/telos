@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.1] - 2026-02-06
+
+Added MCP server for Claude Desktop and Cursor integration. 7 new tools for AI assistants to query activity data.
+
 
 ## [0.2.0] - 2026-02-06
 
