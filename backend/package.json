@@ -23,6 +23,7 @@
   "dependencies": {
     "@google-cloud/firestore": "^7.1.0",
     "@google-cloud/secret-manager": "^5.0.0",
+    "@google/generative-ai": "^0.24.1",
     "@sendgrid/mail": "^8.1.6",
     "@sentry/node": "^7.99.0",
     "@sentry/profiling-node": "^7.99.0",

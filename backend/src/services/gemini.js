@@ -4,45 +4,44 @@
  * Calls Google Gemini API for screenshot analysis.
  * Uses server-side API key to keep prompts private.
  * 
- * PORTKEY INTEGRATION: All calls are routed through Portkey for observability.
- * See https://app.portkey.ai for logs.
+ * Supports two modes:
+ *  1. Direct Gemini API (default) - uses @google/generative-ai SDK
+ *  2. Portkey (optional) - adds observability layer, enabled when PORTKEY_API_KEY is set
  */
 
-import { Portkey } from 'portkey-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getGeminiApiKey } from './secrets.js';
 import { getScreenshotAnalysisPrompt } from './prompts.js';
 
 /**
- * Portkey Configuration
- * Reads from environment variables for security.
- * Optional: If not configured, falls back to direct Gemini API calls.
+ * Portkey Configuration (optional)
+ * When configured, routes calls through Portkey for observability.
  */
 const PORTKEY_API_KEY = process.env.PORTKEY_API_KEY;
 const PORTKEY_VIRTUAL_KEY = process.env.PORTKEY_VIRTUAL_KEY;
 const PORTKEY_ENABLED = !!(PORTKEY_API_KEY && PORTKEY_VIRTUAL_KEY);
 
-if (!PORTKEY_ENABLED) {
-  console.warn('[GEMINI] Portkey not configured - using direct Gemini API (no observability)');
+if (PORTKEY_ENABLED) {
+  console.log('[GEMINI] Portkey enabled - calls routed through Portkey for observability');
+} else {
+  console.log('[GEMINI] Using direct Gemini API');
 }
 
 /**
- * Initialize Portkey client (singleton)
+ * Get Portkey client (only when Portkey is enabled)
  */
-let portkeyClient = null;
-function getPortkeyClient(traceId = null, userId = null, contextMetadata = {}) {
-  if (!PORTKEY_ENABLED) {
-    throw new Error('Portkey is not configured. Please set PORTKEY_API_KEY and PORTKEY_VIRTUAL_KEY environment variables.');
-  }
-  
-  // Create fresh client with metadata for each call
+async function getPortkeyClient(traceId = null, userId = null, contextMetadata = {}) {
+  if (!PORTKEY_ENABLED) return null;
+
+  // Dynamic import to avoid crash when portkey-ai is not installed
+  const { Portkey } = await import('portkey-ai');
   return new Portkey({
     apiKey: PORTKEY_API_KEY,
     virtualKey: PORTKEY_VIRTUAL_KEY,
-    user: userId || 'backend-service',  // Top-level user parameter for Portkey logs
+    user: userId || 'backend-service',
     metadata: {
       call_type: 'screenshot_analysis',
       source: 'telos-backend',
-      // Include window context in Portkey metadata for logging
       window_title: contextMetadata.window_title || 'unknown',
       app_name: contextMetadata.app_name || 'unknown',
       keystrokes: String(contextMetadata.keystrokes || 0),
@@ -69,6 +68,75 @@ let cachedPromptData = null;
 let cacheExpiry = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+const MODEL_NAME = 'gemini-2.5-flash';
+
+/**
+ * Refresh the cached API key and prompt data if stale.
+ */
+async function refreshCache() {
+  const now = Date.now();
+  if (!cachedApiKey || !cachedPromptData || now > cacheExpiry) {
+    const [key, prompt] = await Promise.all([
+      getGeminiApiKey(),
+      getScreenshotAnalysisPrompt()
+    ]);
+    cachedApiKey = key;
+    cachedPromptData = prompt;
+    cacheExpiry = now + CACHE_TTL;
+  }
+  return { apiKey: cachedApiKey, promptData: cachedPromptData };
+}
+
+/**
+ * Call Gemini via Portkey's OpenAI-compatible API
+ */
+async function callViaPortkey(finalPrompt, imageUrl, userId, contextMetadata) {
+  const portkey = await getPortkeyClient(`screenshot-${Date.now()}`, userId, contextMetadata);
+
+  const response = await portkey.chat.completions.create({
+    model: MODEL_NAME,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: finalPrompt },
+          { type: 'image_url', image_url: { url: imageUrl } }
+        ]
+      }
+    ],
+    response_format: { type: 'json_object' },
+    max_tokens: 4096,
+    temperature: 0.4,
+  });
+
+  return response.choices[0].message.content;
+}
+
+/**
+ * Call Gemini directly using the Google Generative AI SDK
+ */
+async function callDirectGemini(apiKey, finalPrompt, imageBuffer, mimeType) {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: MODEL_NAME,
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: 4096,
+      responseMimeType: 'application/json',
+    },
+  });
+
+  const imagePart = {
+    inlineData: {
+      data: imageBuffer.toString('base64'),
+      mimeType: mimeType,
+    },
+  };
+
+  const result = await model.generateContent([finalPrompt, imagePart]);
+  return result.response.text();
+}
+
 /**
  * Call Gemini API to analyze a screenshot
  * 
@@ -81,19 +149,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  */
 export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png', previousCaptures = [], userId = null, contextMetadata = {}) {
   try {
-    // Check cache or fetch in parallel
-    const now = Date.now();
-    if (!cachedApiKey || !cachedPromptData || now > cacheExpiry) {
-      const [key, prompt] = await Promise.all([
-        getGeminiApiKey(),
-        getScreenshotAnalysisPrompt()
-      ]);
-      cachedApiKey = key;
-      cachedPromptData = prompt;
-      cacheExpiry = now + CACHE_TTL;
-    }
-
-    const promptData = cachedPromptData;
+    const { apiKey, promptData } = await refreshCache();
 
     // Build context string from previous captures (similar to client logic)
     const contextStr = buildPreviousContext(previousCaptures);
@@ -105,35 +161,15 @@ export async function analyzeScreenshot(imageBuffer, mimeType = 'image/png', pre
     let finalPrompt = promptData.content.replace('{previous_context}', contextStr);
     finalPrompt = finalPrompt.replace('{system_context}', systemContextStr);
 
-    // Convert image to base64 for multimodal input
-    const base64Image = imageBuffer.toString('base64');
-    const imageUrl = `data:${mimeType};base64,${base64Image}`;
-
-    // Get Portkey client with user metadata and context
-    const portkey = getPortkeyClient(`screenshot-${Date.now()}`, userId, contextMetadata);
-
-    // Use Portkey's OpenAI-compatible API
-    // Portkey translates this to Gemini format automatically
-    const model = "gemini-2.5-flash";
-
-    const response = await portkey.chat.completions.create({
-      model: model,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: finalPrompt },
-            { type: "image_url", image_url: { url: imageUrl } }
-          ]
-        }
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 4096,
-      temperature: 0.4,
-    });
-
-    // Extract the response text
-    const textResponse = response.choices[0].message.content;
+    // Call Gemini (via Portkey if configured, otherwise direct)
+    let textResponse;
+    if (PORTKEY_ENABLED) {
+      const base64Image = imageBuffer.toString('base64');
+      const imageUrl = `data:${mimeType};base64,${base64Image}`;
+      textResponse = await callViaPortkey(finalPrompt, imageUrl, userId, contextMetadata);
+    } else {
+      textResponse = await callDirectGemini(apiKey, finalPrompt, imageBuffer, mimeType);
+    }
 
     // Parse JSON response
     let analysis;
@@ -251,34 +287,42 @@ export async function generateDailyNarrative(sessions, categoryTotals, userGoal 
   console.log('[GEMINI] Generating daily narrative from sessions');
 
   try {
-    // Build prompt
     const prompt = buildNarrativePrompt(sessions, categoryTotals, userGoal);
 
-    // Initialize Portkey client
-    const client = getPortkeyClient('daily-narrative', 'system');
+    let resultText;
 
-    // Call Gemini via Portkey
-    const response = await client.chat.completions.create({
-      model: 'gemini-2.5-flash',
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      response_format: { type: 'json_object' }
-    });
+    if (PORTKEY_ENABLED) {
+      const client = await getPortkeyClient('daily-narrative', 'system');
+      const response = await client.chat.completions.create({
+        model: MODEL_NAME,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        response_format: { type: 'json_object' }
+      });
+      resultText = response.choices[0].message.content;
+    } else {
+      // Direct Gemini call for text-only request
+      const { apiKey } = await refreshCache();
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: MODEL_NAME,
+        generationConfig: {
+          temperature: 0.7,
+          responseMimeType: 'application/json',
+        },
+      });
+      const result = await model.generateContent(prompt);
+      resultText = result.response.text();
+    }
 
-    const resultText = response.choices[0].message.content;
-    const result = JSON.parse(resultText);
+    const parsed = JSON.parse(resultText);
 
     console.log('[GEMINI] Generated narrative successfully');
 
     return {
-      narrative: result.daily_narrative || 'No narrative generated.',
-      learnings: result.key_learnings || [],
-      score: result.productivity_score || 50
+      narrative: parsed.daily_narrative || 'No narrative generated.',
+      learnings: parsed.key_learnings || [],
+      score: parsed.productivity_score || 50
     };
 
   } catch (error) {
