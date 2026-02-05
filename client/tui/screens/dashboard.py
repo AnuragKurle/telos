@@ -13,8 +13,8 @@ from tui.widgets import StatusBanner, CurrentActivity, CategoryBreakdown, Recent
 from tui.widgets.day_heatmap import DayHeatmap
 from tui.widgets.activity_waveform import ActivityWaveform
 from tui.screens.feedback_modal import FeedbackModal
-from tui.screens.feedback_modal import FeedbackModal
 from tui.screens.upgrade_modal import UpgradeModal
+from core.trial_manager import TrialManager
 
 
 class DashboardScreen(Screen):
@@ -194,6 +194,10 @@ class DashboardScreen(Screen):
         self._update_graph_visibility()
         # Update greeting every minute for time-accurate greetings
         self.set_interval(60.0, self.update_greeting)
+        # Hide upgrade binding if user is Pro
+        self._update_upgrade_binding()
+        # Show contextual nudge if applicable (delayed so it doesn't feel intrusive)
+        self.set_timer(5.0, self._show_contextual_nudge)
 
     def watch_graph_mode(self, old_mode: str, new_mode: str) -> None:
         """Update visibility when graph mode changes."""
@@ -355,8 +359,49 @@ class DashboardScreen(Screen):
             except:
                 pass
 
+    def _show_contextual_nudge(self) -> None:
+        """Show a subtle contextual nudge if conditions are met."""
+        try:
+            trial_manager = TrialManager(self.app.config)
+            
+            # Check for session milestone nudge
+            session_count = getattr(self.app, 'sessions_today', 0)
+            nudge = trial_manager.get_contextual_nudge("milestone", session_count=session_count)
+            if nudge:
+                self.app.notify(nudge, severity="information", timeout=8)
+                return
+            
+            # Check for day-based dashboard nudge
+            nudge = trial_manager.get_contextual_nudge("dashboard")
+            if nudge:
+                self.app.notify(nudge, severity="information", timeout=8)
+        except Exception:
+            pass
+
+    def _update_upgrade_binding(self) -> None:
+        """Refresh the footer to reflect binding changes based on Pro status."""
+        try:
+            footer = self.query_one(Footer)
+            footer.refresh()
+        except Exception:
+            pass
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Conditionally disable/hide actions based on subscription status."""
+        if action == "show_upgrade":
+            trial_manager = TrialManager(self.app.config)
+            if trial_manager.is_pro():
+                return None  # Hide from footer when Pro
+        return True
+
     def action_show_upgrade(self) -> None:
         """Show upgrade modal."""
+        # Check if already pro
+        trial_manager = TrialManager(self.app.config)
+        if trial_manager.is_pro():
+            self.app.notify("You're already a Pro user!", severity="information")
+            return
+
         # Get email from config
         email = self.app.config.get('account', 'email', default="")
         

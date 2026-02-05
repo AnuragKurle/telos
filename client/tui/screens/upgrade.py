@@ -138,8 +138,7 @@ class UpgradeScreen(Screen):
             self.action_dismiss_screen()
     
     def action_upgrade(self) -> None:
-        """Open upgrade URL in browser."""
-        # Call backend to create Stripe Checkout session
+        """Open upgrade URL in browser and schedule status polling."""
         config = self.app.config
         backend_url = config.get('backend', 'url')
         
@@ -166,7 +165,9 @@ class UpgradeScreen(Screen):
             checkout_url = response.get('url')
             if checkout_url:
                 webbrowser.open(checkout_url)
-                self.app.notify("Opening Stripe Checkout...", severity="information")
+                self.app.notify("Opening checkout... We'll detect your upgrade automatically.", severity="information")
+                # Schedule polling to detect upgrade
+                self._schedule_status_refresh()
             else:
                 self.app.notify("Failed to create checkout session", severity="error")
                 
@@ -174,6 +175,74 @@ class UpgradeScreen(Screen):
             self.app.notify(f"Error: {str(e)}", severity="error")
         
         self.dismiss()
+    
+    def _schedule_status_refresh(self) -> None:
+        """Schedule delayed status refresh attempts after checkout."""
+        import asyncio
+        
+        async def poll_for_upgrade():
+            """Poll backend for upgrade status with backoff."""
+            from core.trial_manager import TrialManager
+            
+            delays = [15, 30, 60, 120]
+            for delay in delays:
+                await asyncio.sleep(delay)
+                try:
+                    config = self.app.config
+                    backend_url = config.get('backend', 'url', default='')
+                    firebase_api_key = config.get('firebase', 'api_key', default='')
+                    
+                    if not backend_url or not firebase_api_key:
+                        return
+                    
+                    trial_manager = TrialManager(config)
+                    result = await asyncio.to_thread(
+                        trial_manager.refresh_account_status,
+                        backend_url,
+                        firebase_api_key
+                    )
+                    
+                    if result and trial_manager.is_pro():
+                        self.app.notify(
+                            "Welcome to Telos Pro! All features are now unlocked.",
+                            severity="information",
+                            timeout=10
+                        )
+                        # Refresh UI elements
+                        self._apply_pro_ui_refresh()
+                        # Mark pro welcome for next screen
+                        config.config.setdefault('account', {})['show_pro_welcome'] = True
+                        config.save(config.config)
+                        return
+                except Exception as e:
+                    print(f"[UPGRADE] Status refresh failed: {e}")
+        
+        asyncio.create_task(poll_for_upgrade())
+    
+    def _apply_pro_ui_refresh(self) -> None:
+        """Update all visible UI elements to reflect Pro status."""
+        try:
+            from tui.widgets.status_banner import StatusBanner
+            for banner in self.app.query(StatusBanner):
+                banner.refresh_status()
+            
+            from tui.screens.dashboard import DashboardScreen
+            for screen in self.app.screen_stack:
+                if isinstance(screen, DashboardScreen):
+                    screen._update_upgrade_binding()
+                    break
+            
+            # Start workers if they weren't running (expired trial upgrade)
+            if not self.app.capture_worker or self.app.capture_worker.done():
+                import asyncio
+                from tui.workers import capture_worker_task, db_polling_worker
+                from tui.workers.session_worker import session_worker_task
+                self.app.capture_worker = asyncio.create_task(capture_worker_task(self.app))
+                self.app.db_worker = asyncio.create_task(db_polling_worker(self.app))
+                self.app.session_worker = asyncio.create_task(session_worker_task(self.app))
+                self.app.loop_status = "active"
+        except Exception as e:
+            print(f"[UPGRADE] UI refresh error: {e}")
     
     def action_dismiss_screen(self) -> None:
         """Dismiss the screen."""

@@ -11,6 +11,7 @@ from textual.containers import Container, Horizontal, Vertical
 from rich.text import Text
 
 from core.database import Database
+from core.trial_manager import TrialManager
 from tui.screens.feedback_modal import FeedbackModal
 
 
@@ -25,6 +26,7 @@ class TimelineScreen(Screen):
         ("q", "app.quit", "Quit"),
         ("r", "refresh", "Refresh"),
         ("v", "toggle_view", "Sessions/Captures"),
+        ("e", "export_data", "Export"),
     ]
     
     # Category color palette matching the activity graph
@@ -58,6 +60,18 @@ class TimelineScreen(Screen):
         # Setup table
         table = self.query_one(DataTable)
         table.cursor_type = "row"
+
+        # Show trial restriction message if applicable
+        trial_manager = TrialManager(self.app.config)
+        if trial_manager.is_trial_expired() and not trial_manager.is_pro():
+            self.query_one("#detail-content").update(
+                "[bold yellow]Trial Expired[/bold yellow]\n\n"
+                "You're viewing today's data only.\n"
+                "History beyond 7 days is locked.\n\n"
+                "[dim]Your data is safely preserved.\n"
+                "Upgrade to Pro to unlock\n"
+                "your complete history.[/dim]"
+            )
 
         # Initial load - scroll to bottom to show most recent
         self._refresh_data(scroll_to_bottom=True)
@@ -511,4 +525,77 @@ class TimelineScreen(Screen):
                 f"[bold red]✗ Failed to submit feedback[/bold red]\n\n"
                 f"Error: {str(e)}\n\n"
                 f"Please try again or check your backend connection."
+            )
+
+    def action_export_data(self) -> None:
+        """Export activity data to CSV (Pro-only feature)."""
+        trial_manager = TrialManager(self.app.config)
+        
+        if not trial_manager.is_pro() and not trial_manager.is_trial_active():
+            # Expired trial: locked feature
+            self.query_one("#detail-content").update(
+                "[bold yellow]Export is a Pro Feature[/bold yellow]\n\n"
+                "Upgrade to Pro to export your\n"
+                "activity data as CSV or JSON.\n\n"
+                "[dim]Your data is safely preserved.\n"
+                "Press U on Dashboard to upgrade.[/dim]"
+            )
+            return
+        
+        if not trial_manager.is_pro():
+            # Active trial: show as preview with note
+            self.app.notify(
+                "Export is available during your trial. Upgrade to keep it.",
+                severity="information",
+                timeout=5
+            )
+        
+        # Do the export
+        self.run_worker(self._export_data_async())
+    
+    async def _export_data_async(self) -> None:
+        """Export data in background."""
+        import asyncio
+        from pathlib import Path
+        
+        try:
+            config = self.app.config
+            db = Database(config.get('storage', 'database_path'))
+            
+            from core.data_exporter import DataExporter
+            exporter = DataExporter(db)
+            
+            # Determine export path (user's home directory / Telos Exports)
+            export_dir = Path.home() / "Telos Exports"
+            export_dir.mkdir(exist_ok=True)
+            
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            
+            if self.view_mode == "sessions":
+                filename = f"telos_sessions_{today_str}.csv"
+                filepath = str(export_dir / filename)
+                count = await asyncio.to_thread(exporter.export_today_sessions_csv, filepath)
+                data_type = "sessions"
+            else:
+                filename = f"telos_captures_{today_str}.csv"
+                filepath = str(export_dir / filename)
+                count = await asyncio.to_thread(exporter.export_today_captures_csv, filepath)
+                data_type = "captures"
+            
+            if count > 0:
+                self.query_one("#detail-content").update(
+                    f"[bold green]Export Complete[/bold green]\n\n"
+                    f"Exported {count} {data_type} to:\n"
+                    f"[dim]{filepath}[/dim]\n\n"
+                    f"[dim]Press E to export again.[/dim]"
+                )
+            else:
+                self.query_one("#detail-content").update(
+                    f"[bold yellow]No Data to Export[/bold yellow]\n\n"
+                    f"No {data_type} found for today."
+                )
+        except Exception as e:
+            self.query_one("#detail-content").update(
+                f"[bold red]Export Failed[/bold red]\n\n"
+                f"Error: {str(e)}"
             )

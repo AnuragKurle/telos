@@ -7,6 +7,7 @@
 import express from 'express';
 import { checkClientVersion } from '../middleware/versionCheck.js';
 import { verifyFirebaseToken } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscriptionCheck.js';
 import { rateLimitMiddleware } from '../middleware/rateLimit.js';
 import { uploadImage, handleUploadErrors, validateImageUploaded } from '../middleware/upload.js';
 import { analyzeScreenshot } from '../services/gemini.js';
@@ -32,14 +33,15 @@ router.post(
   // Middleware chain (order matters!)
   checkClientVersion,           // 1. Check client version
   verifyFirebaseToken,          // 2. Verify Firebase token
-  rateLimitMiddleware,          // 3. Check rate limits
-  uploadImage,                  // 4. Handle file upload
-  handleUploadErrors,           // 5. Handle upload errors
-  validateImageUploaded,        // 6. Validate file exists
-  async (req, res) => {         // 7. Process request
+  requireActiveSubscription,    // 3. Check subscription status (trial/pro)
+  rateLimitMiddleware,          // 4. Check rate limits
+  uploadImage,                  // 5. Handle file upload
+  handleUploadErrors,           // 6. Handle upload errors
+  validateImageUploaded,        // 7. Validate file exists
+  async (req, res) => {         // 8. Process request
     try {
       // Log request (without logging image data)
-      console.log(`[Analysis] User: ${req.user.uid}, File: ${req.file.originalname}, Size: ${req.file.size} bytes`);
+      console.log(`[Analysis] User: ${req.user.uid} (${req.accessStatus || 'unknown'}), File: ${req.file.originalname}, Size: ${req.file.size} bytes`);
 
       // Parse previous context if provided
       let previousCaptures = [];

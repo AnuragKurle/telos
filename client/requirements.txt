@@ -11,3 +11,4 @@ requests>=2.31.0
 portkey-ai>=2.0.0
 pywin32>=306; sys_platform == 'win32'
 sentry-sdk>=1.40.0
+mcp>=1.22.0

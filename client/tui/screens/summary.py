@@ -14,6 +14,7 @@ from core.analyzer import GeminiAnalyzer
 from core.goal_manager import AnalysisGoalManager
 from core.daily_aggregator import DailyAggregator
 from core.session_builder import SessionBuilder
+from core.trial_manager import TrialManager
 from tui.screens.feedback_modal import FeedbackModal
 
 
@@ -23,6 +24,7 @@ class SummaryScreen(Screen):
     BINDINGS = [
         ("r", "regenerate", "Regenerate"),
         ("b", "rebuild_sessions", "Rebuild Sessions"),
+        ("e", "export_json", "Export JSON"),
         ("escape", "app.pop_screen", "Back"),
         ("q", "app.quit", "Quit"),
     ]
@@ -53,6 +55,67 @@ class SummaryScreen(Screen):
     def action_regenerate(self) -> None:
         """Regenerate daily summary (force regeneration)."""
         self.run_worker(self.generate_summary_async(force=True))
+
+    def action_export_json(self) -> None:
+        """Export today's data as JSON (Pro-only feature)."""
+        trial_manager = TrialManager(self.app.config)
+        
+        if not trial_manager.is_pro() and not trial_manager.is_trial_active():
+            self.query_one("#summary-content").update(
+                "[bold yellow]Export is a Pro Feature[/bold yellow]\n\n"
+                "Upgrade to Pro to export your\n"
+                "activity data as JSON.\n\n"
+                "[dim]Your data is safely preserved.\n"
+                "Press U on Dashboard to upgrade.[/dim]"
+            )
+            return
+        
+        if not trial_manager.is_pro():
+            self.app.notify(
+                "Export is available during your trial. Upgrade to keep it.",
+                severity="information",
+                timeout=5
+            )
+        
+        self.run_worker(self._export_json_async())
+    
+    async def _export_json_async(self) -> None:
+        """Export data as JSON in background."""
+        from pathlib import Path
+        
+        try:
+            config = self.app.config
+            db = Database(config.get('storage', 'database_path'))
+            
+            from core.data_exporter import DataExporter
+            exporter = DataExporter(db)
+            
+            export_dir = Path.home() / "Telos Exports"
+            export_dir.mkdir(exist_ok=True)
+            
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            filename = f"telos_data_{today_str}.json"
+            filepath = str(export_dir / filename)
+            
+            count = await asyncio.to_thread(exporter.export_today_json, filepath)
+            
+            if count > 0:
+                self.query_one("#summary-content").update(
+                    f"[bold green]Export Complete[/bold green]\n\n"
+                    f"Exported {count} records to:\n"
+                    f"[dim]{filepath}[/dim]\n\n"
+                    f"[dim]Press R to regenerate summary | ESC to go back[/dim]"
+                )
+            else:
+                self.query_one("#summary-content").update(
+                    "[bold yellow]No Data to Export[/bold yellow]\n\n"
+                    "No data found for today."
+                )
+        except Exception as e:
+            self.query_one("#summary-content").update(
+                f"[bold red]Export Failed[/bold red]\n\n"
+                f"Error: {str(e)}"
+            )
 
     def action_rebuild_sessions(self) -> None:
         """Rebuild sessions from scratch for today."""
@@ -172,6 +235,8 @@ class SummaryScreen(Screen):
         if summary:
             self.current_summary = summary
             self.display_summary(summary)
+            # Show a subtle nudge after summary generation (non-blocking)
+            self._show_summary_nudge()
         else:
             self.current_summary = None
             self.query_one("#summary-content").update(
@@ -183,9 +248,15 @@ class SummaryScreen(Screen):
     def display_summary(self, summary: dict) -> None:
         """Format and display summary.
 
+        Shows full summary for Pro/trial users, truncated for expired trial.
+
         Args:
             summary: Summary dictionary from database
         """
+        # Check subscription status
+        trial_manager = TrialManager(self.app.config)
+        is_expired = trial_manager.is_trial_expired() and not trial_manager.is_pro()
+
         # Parse learnings
         learnings_json = summary.get('key_learnings_json', '[]')
         try:
@@ -239,7 +310,48 @@ class SummaryScreen(Screen):
             productivity *= 100
         productivity_bar = self._create_progress_bar(productivity, width=30)
 
-        content = f"""
+        if is_expired:
+            # Truncated view for expired trial users
+            # Show the time breakdown (which they can already see on dashboard)
+            # but hide narrative, learnings, and focus blocks
+            narrative_preview = summary.get('daily_narrative', '')
+            # Show first ~100 chars as a teaser
+            if len(narrative_preview) > 120:
+                narrative_preview = narrative_preview[:120] + "..."
+            
+            content = f"""
+[bold reverse] DAILY SUMMARY - {summary['date']} [/]
+
+[bold cyan]PRODUCTIVITY SCORE[/]
+{productivity_bar} [bold]{productivity:.1f}/100[/]
+
+[bold cyan]TIME BREAKDOWN[/]
+  💼 [bold white]Work:[/]          {work_min}m
+  📚 [bold white]Learning:[/]      {learning_min}m
+  🌐 [bold white]Browsing:[/]      {browsing_min}m
+  🎮 [bold white]Entertainment:[/] {entertainment_min}m
+
+[bold cyan]ACTIVITY PATTERNS[/]
+  Context Switches: [bold white]{summary.get('context_switches', 0)}[/]
+
+[bold cyan]AI-GENERATED NARRATIVE[/]
+───────────────────────────────────────────────────────────────────────────
+[dim]{narrative_preview}[/dim]
+
+[bold yellow]Upgrade to Pro to see your full AI insights.[/bold yellow]
+
+  Full daily narrative and analysis
+  Key learnings and insights
+  Focus block identification
+  Historical summary access
+
+[dim]Your data is preserved. Upgrade to unlock the complete summary.[/dim]
+───────────────────────────────────────────────────────────────────────────
+[dim]Press U on Dashboard to upgrade | ESC to go back[/dim]
+"""
+        else:
+            # Full summary for Pro/active trial users
+            content = f"""
 [bold reverse] DAILY SUMMARY - {summary['date']} [/]
 
 [bold cyan]PRODUCTIVITY SCORE[/]
@@ -268,6 +380,16 @@ class SummaryScreen(Screen):
 [dim]Press R to regenerate summary | B to rebuild sessions | ESC to go back[/dim]
 """
         self.query_one("#summary-content").update(content)
+
+    def _show_summary_nudge(self) -> None:
+        """Show a subtle contextual nudge after summary generation."""
+        try:
+            trial_manager = TrialManager(self.app.config)
+            nudge = trial_manager.get_contextual_nudge("summary")
+            if nudge:
+                self.app.notify(nudge, severity="information", timeout=8)
+        except Exception:
+            pass
 
     def action_show_feedback(self) -> None:
         """Show feedback modal for current summary."""
