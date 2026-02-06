@@ -230,12 +230,9 @@ class DashboardScreen(FeedbackMixin, Screen):
     def _get_graph_controls_text(self) -> str:
         """Get the graph controls indicator text with keybinding hints."""
         if self.graph_mode == "day":
-            tabs = "[bold cyan]Day View[/bold cyan] │ [dim]60min View[/dim]"
-            hints = "  [dim]V: switch  ←→: change day  SPACE: expand  T: today[/dim]"
+            return "[dim]V: switch view  ←→: change day  SPACE: expand  T: today[/dim]"
         else:
-            tabs = "[dim]Day View[/dim] │ [bold cyan]60min View[/bold cyan]"
-            hints = "  [dim]V: switch[/dim]"
-        return tabs + hints
+            return "[dim]V: switch view[/dim]"
 
     def _update_graph_controls(self) -> None:
         """Update the graph control labels."""
