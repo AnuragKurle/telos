@@ -1,6 +1,30 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.2.2] - 2026-02-06
+
+### Fixed
+- Fix Portkey ByteString crash on non-ASCII window titles (screenshot analysis 500 errors)
+
+### Changed
+- Migrate all sensitive keys to Google Cloud Secret Manager
+- Switch Dodo Payments to live mode for real payment processing
+- Enable Slack monitoring alerts for errors and slow requests
+
+### Added
+- Splash screen with animated branding
+- Getting started guide for new users
+- Sample preview screen showing tracking in action
+- Email setup screen for report configuration
+- Centralized theme system for consistent styling
+- Feedback mixin for user feedback collection
+
+### Improved
+- Dashboard, summary, timeline, settings, and chat screens polished
+- Welcome carousel and onboarding flow refined
+- Trial manager with better expiry handling
+- Website pricing component and Firebase functions
+
 ## [0.2.1] - 2026-02-06
 
 Added MCP server for Claude Desktop and Cursor integration. 7 new tools for AI assistants to query activity data.
