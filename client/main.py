@@ -642,6 +642,7 @@ def run_onboarding(config, onboarding_mgr):
             user_name = personal_result['name']
             email = personal_result['email']
             password = personal_result['password']
+            referral_code = personal_result.get('referral_code')
 
             # ── 3. Sample data preview (personalized) ────────────────
             result = await self.push_screen_wait(SamplePreviewScreen(user_name=user_name))
@@ -734,7 +735,7 @@ def run_onboarding(config, onboarding_mgr):
                 if backend_url:
                     try:
                         # Silently verify access and start trial
-                        trial_response = self.backend_client.verify_access(email)
+                        trial_response = self.backend_client.verify_access(email, referral_code=referral_code)
                         if trial_response.get('access'):
                             self.trial_manager.activate_trial(
                                 email,

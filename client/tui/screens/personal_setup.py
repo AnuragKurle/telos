@@ -109,6 +109,10 @@ class PersonalSetupScreen(Screen):
                     yield Label("Password:", classes="form-label")
                     yield Input(placeholder="Minimum 6 characters", password=True, id="password-input")
                 
+                with Container(classes="form-field phase-2", id="referral-field"):
+                    yield Label("Referral code (optional):", classes="form-label")
+                    yield Input(placeholder="TELOS-XXXX", id="referral-input")
+                
                 yield Static("", id="status-message")
                 
                 with Container(id="button-container"):
@@ -163,6 +167,9 @@ class PersonalSetupScreen(Screen):
         if event.input.id == "name-input" and self.phase == 1:
             self.action_continue_phase_1()
         elif event.input.id == "password-input" and self.phase == 2:
+            # Tab to referral field instead of submitting
+            self.query_one("#referral-input", Input).focus()
+        elif event.input.id == "referral-input" and self.phase == 2:
             self.action_create_account()
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -189,6 +196,7 @@ class PersonalSetupScreen(Screen):
         """Create account and proceed."""
         email = self.query_one("#email-input", Input).value.strip()
         password = self.query_one("#password-input", Input).value.strip()
+        referral_code = self.query_one("#referral-input", Input).value.strip() or None
         status_msg = self.query_one("#status-message", Static)
         
         # Validation
@@ -204,9 +212,15 @@ class PersonalSetupScreen(Screen):
             status_msg.update("⚠️ Password must be at least 6 characters")
             return
         
+        # Validate referral code format if provided
+        if referral_code and not referral_code.startswith("TELOS-"):
+            status_msg.update("⚠️ Referral code should start with TELOS-")
+            return
+        
         # Return the collected data
         self.dismiss({
             "name": self.user_name,
             "email": email,
-            "password": password
+            "password": password,
+            "referral_code": referral_code,
         })

@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Waitlist Collection ──────────────────────────────────────
+    // Allow unauthenticated writes for waitlist sign-ups from landing page.
+    // Restrict fields and validate email format to prevent abuse.
+    match /waitlist/{email} {
+      allow read: if false; // No client-side reads
+      allow create: if
+        // Validate email format (basic check)
+        email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$') &&
+        // Only allow expected fields
+        request.resource.data.keys().hasOnly(['email', 'timestamp', 'source', 'referralCode']) &&
+        // Email must be a string
+        request.resource.data.email is string &&
+        request.resource.data.email.size() <= 254;
+      allow update, delete: if false; // No client-side updates or deletes
+    }
+
+    // ─── All Other Collections ────────────────────────────────────
+    // Block all client-side access. These are managed by the backend
+    // (Firebase Admin SDK) which bypasses security rules.
+    match /users/{userId} {
+      allow read, write: if false;
+    }
+
+    match /referrals/{referralId} {
+      allow read, write: if false;
+    }
+
+    match /daily_summaries/{summaryId} {
+      allow read, write: if false;
+    }
+
+    match /usage/{userId} {
+      allow read, write: if false;
+    }
+
+    match /feedback/{feedbackId} {
+      allow read, write: if false;
+    }
+
+    match /email_campaigns/{campaignId} {
+      allow read, write: if false;
+    }
+
+    // ─── Catch-all: deny everything else ──────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

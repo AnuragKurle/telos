@@ -10,6 +10,7 @@ import admin from 'firebase-admin';
 import { DateTime } from 'luxon';
 import { generateSummaryFromUsage } from './summaryGenerator.js';
 import { encrypt, decrypt, encryptFields, decryptFields } from './encryption.js';
+import { generateViewToken } from '../routes/webReport.js';
 
 // Sensitive fields in summary objects
 const SUMMARY_ENCRYPT_FIELDS = ['daily_narrative', 'key_learnings_json', 'apps', 'timeline', 'deep_work_sessions'];
@@ -47,60 +48,126 @@ function formatDuration(minutes) {
 }
 
 /**
+ * Generate a smart, context-aware email subject line
+ */
+function generateSubjectLine(summary) {
+  const dateObj = new Date(summary.date);
+  const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+  const workMin = Math.floor(summary.work_seconds / 60);
+  const learningMin = Math.floor(summary.learning_seconds / 60);
+  const browsingMin = Math.floor(summary.browsing_seconds / 60);
+  const entertainmentMin = Math.floor(summary.entertainment_seconds / 60);
+  const totalMin = workMin + learningMin + browsingMin + entertainmentMin;
+
+  const deepWork = summary.deep_work_sessions || [];
+  const weeklyComp = summary.weekly_comparison || {};
+  const focusQuality = summary.focus_quality || {};
+
+  // Pick the most interesting angle for the subject
+  // Priority 1: Notable deep work
+  if (deepWork.length >= 3) {
+    return `${deepWork.length} deep work sessions -- Strong focus on ${dayName}`;
+  }
+
+  // Priority 2: Best day compared to weekly average
+  if (weeklyComp.has_history && weeklyComp.work_diff > 30) {
+    return `Your most productive ${dayName} this week`;
+  }
+
+  // Priority 3: High focus quality
+  if (focusQuality.focus_quality_score >= 80) {
+    return `${formatDuration(totalMin)} tracked -- Excellent focus on ${dayName}`;
+  }
+
+  // Priority 4: Significant productive time
+  if (workMin >= 120) {
+    return `${formatDuration(workMin)} of work -- Your ${dayName} Recap`;
+  }
+
+  // Priority 5: Learning-heavy day
+  if (learningMin > workMin && learningMin >= 30) {
+    return `${formatDuration(learningMin)} learning -- Your ${dayName} Recap`;
+  }
+
+  // Default: Total time + day
+  return `${formatDuration(totalMin)} tracked -- Your ${dayName} Recap`;
+}
+
+/**
  * Generate insights and recommendations section
+ * Now more actionable with comparisons, tips, peak hours, and streaks
  */
 function generateInsightsHTML(summary, workMin, totalMin, weeklyComp, focusQuality, deepWork) {
   const insights = [];
 
-  // Deep work insight
+  // Peak productivity time insight (use hourly data if available)
+  const peakHour = summary.peak_productivity_hour;
+  if (peakHour && workMin > 30) {
+    const peakFormatted = peakHour > 12 ? `${peakHour - 12} PM` : peakHour === 12 ? '12 PM' : `${peakHour} AM`;
+    const endHour = peakHour + 2;
+    const endFormatted = endHour > 12 ? `${endHour - 12} PM` : endHour === 12 ? '12 PM' : `${endHour} AM`;
+    insights.push(`🕐 Your peak productivity window was <strong>${peakFormatted} - ${endFormatted}</strong>. Schedule your most demanding work here.`);
+  }
+
+  // Deep work insight - more actionable
   if (deepWork.length > 0) {
     const totalDeepWork = deepWork.reduce((sum, s) => sum + s.duration_mins, 0);
-    insights.push(`⚡ You had ${deepWork.length} deep work session${deepWork.length > 1 ? 's' : ''} totaling ${totalDeepWork} minutes of sustained focus.`);
+    if (deepWork.length >= 3) {
+      insights.push(`⚡ <strong>${deepWork.length} deep work sessions</strong> totaling ${formatDuration(totalDeepWork)} -- that's strong sustained focus. Keep protecting this time.`);
+    } else {
+      insights.push(`⚡ ${deepWork.length} deep work session${deepWork.length > 1 ? 's' : ''} (${formatDuration(totalDeepWork)}). Aim for 3+ sessions by blocking distractions during focus windows.`);
+    }
   } else if (workMin > 10) {
-    insights.push(`💡 No deep work sessions detected. Try blocking 15+ minutes for focused work without switching apps.`);
+    insights.push(`💡 No deep work detected today. Try the <strong>25-5 technique</strong>: 25 min focused work, 5 min break. Even one session makes a difference.`);
   }
 
-  // Weekly comparison insight
+  // Weekly comparison insight - with percentage change
   if (weeklyComp.has_history) {
-    if (weeklyComp.work_diff > 0) {
-      insights.push(`📈 ${weeklyComp.work_diff}m more work time than your ${weeklyComp.days_compared}-day average (${weeklyComp.avg_work}m).`);
-    } else if (weeklyComp.work_diff < -10) {
-      insights.push(`📉 ${Math.abs(weeklyComp.work_diff)}m less work time than usual. Your ${weeklyComp.days_compared}-day average is ${weeklyComp.avg_work}m.`);
+    const pctChange = weeklyComp.avg_work > 0
+      ? Math.round(((weeklyComp.current_work - weeklyComp.avg_work) / weeklyComp.avg_work) * 100)
+      : 0;
+    if (weeklyComp.work_diff > 15) {
+      insights.push(`📈 Work time <strong>up ${Math.abs(pctChange)}%</strong> vs your ${weeklyComp.days_compared}-day average (${formatDuration(weeklyComp.avg_work)} avg). You're building momentum.`);
+    } else if (weeklyComp.work_diff < -15) {
+      insights.push(`📉 Work time <strong>down ${Math.abs(pctChange)}%</strong> vs your ${weeklyComp.days_compared}-day average (${formatDuration(weeklyComp.avg_work)} avg). Lighter day -- sometimes that's needed.`);
     }
   }
 
-  // Focus quality insight
+  // Focus quality insight - with specific advice
   if (focusQuality.focus_quality_score) {
-    if (focusQuality.focus_quality_score >= 70) {
-      insights.push(`✨ Strong focus quality (${focusQuality.focus_quality_score}/100). Average session: ${focusQuality.avg_session_length}min.`);
+    if (focusQuality.focus_quality_score >= 80) {
+      insights.push(`✨ Excellent focus quality (<strong>${focusQuality.focus_quality_score}/100</strong>). Avg session: ${focusQuality.avg_session_length}m. This is top-tier concentration.`);
+    } else if (focusQuality.focus_quality_score >= 50) {
+      insights.push(`🔄 Moderate focus (${focusQuality.focus_quality_score}/100). Your avg session was ${focusQuality.avg_session_length}m. Try closing extra tabs and notifications to push past 70.`);
     } else if (focusQuality.fragmentation_ratio > 50) {
-      insights.push(`🔀 High fragmentation (${focusQuality.fragmentation_ratio}% short sessions). Try longer focused blocks.`);
+      insights.push(`🔀 High fragmentation: <strong>${focusQuality.fragmentation_ratio}% of sessions under 3 min</strong>. Close unnecessary apps and try single-tasking for 20 min blocks.`);
     }
   }
 
-  // Context switching insight
-  if (summary.context_switches > 50) {
-    insights.push(`⚠️ ${summary.context_switches} context switches detected. Frequent app switching may reduce productivity.`);
+  // Context switching - with benchmark
+  if (summary.context_switches > 80) {
+    insights.push(`⚠️ <strong>${summary.context_switches} context switches</strong> -- that's very high. Each switch costs ~23 min of refocus time. Try batching similar tasks together.`);
+  } else if (summary.context_switches > 50) {
+    insights.push(`🔃 ${summary.context_switches} context switches today. Consider grouping communication (Slack, email) into 2-3 check-in windows rather than constant monitoring.`);
   }
 
-  // Distraction insight
-  if (focusQuality.distraction_minutes > 30) {
-    insights.push(`🎯 ${focusQuality.distraction_minutes}m spent on potential distractions. Consider blocking distraction time.`);
-  }
-
-  // Productive ratio insight
-  const productiveMin = workMin + Math.floor(summary.learning_seconds / 60);
+  // Productive ratio
+  const learningMin = Math.floor(summary.learning_seconds / 60);
+  const productiveMin = workMin + learningMin;
   const productiveRatio = Math.round(productiveMin / Math.max(totalMin, 1) * 100);
-  if (productiveRatio >= 60) {
-    insights.push(`🎯 ${productiveRatio}% of your time was spent on productive activities.`);
+  if (productiveRatio >= 70) {
+    insights.push(`🎯 <strong>${productiveRatio}% productive time</strong> -- above the 60% benchmark. Well-balanced day.`);
+  } else if (productiveRatio < 40 && totalMin > 60) {
+    insights.push(`🎯 ${productiveRatio}% productive time today. Try starting tomorrow with your hardest task first -- the "eat the frog" approach works.`);
   }
 
   if (insights.length === 0) {
-    insights.push('Keep tracking your activity to build insights over time.');
+    insights.push('Keep tracking your activity to build personalized insights over time.');
   }
 
   return insights.map(insight => `
-                                        <div style="padding: 10px 14px; margin-bottom: 8px; background-color: #1a1a1a; border-left: 3px solid #22c55e; border-radius: 0 6px 6px 0; color: #d4d4d4; font-size: 13px; line-height: 1.5;">
+                                        <div style="padding: 12px 16px; margin-bottom: 8px; background-color: #1a1a1a; border-left: 3px solid #22c55e; border-radius: 0 6px 6px 0; color: #d4d4d4; font-size: 13px; line-height: 1.6;">
                                             ${insight}
                                         </div>`).join('');
 }
@@ -128,10 +195,9 @@ function getAppIcon(appName, category) {
 
 /**
  * Generate HTML email from daily summary data
- * Uses dark-themed Telos template with Top Apps and Timeline
+ * Dark-themed Telos template with charts, score bar, app bars, CTA, and insights
  */
-function generateReportHTML(summary, userName = 'there') {
-  // Extract name from email if userName is email-like
+function generateReportHTML(summary, userName = 'there', reportUrl = null) {
   const safeName = userName || 'there';
   const displayName = safeName.includes('@') ? safeName.split('@')[0] : safeName;
 
@@ -154,61 +220,191 @@ function generateReportHTML(summary, userName = 'there') {
   const apps = summary.apps || [];
   const timeline = summary.timeline || [];
 
-  // Enhanced analytics
   const deepWork = summary.deep_work_sessions || [];
   const focusQuality = summary.focus_quality || {};
   const weeklyComp = summary.weekly_comparison || {};
   const peakHour = summary.peak_productivity_hour || 0;
 
-  // Generate Top Apps HTML
+  // Score
+  const prodScore = Math.round(summary.productivity_score || 0);
+  const scoreColor = prodScore >= 70 ? '#22c55e' : prodScore >= 45 ? '#f59e0b' : '#ef4444';
+  const scoreBg = prodScore >= 70 ? '#0f2b1a' : prodScore >= 45 ? '#2b2410' : '#2b1010';
+  const scoreVerdict = prodScore >= 80 ? 'Excellent day'
+    : prodScore >= 65 ? 'Solid day'
+    : prodScore >= 45 ? 'Mixed day'
+    : prodScore >= 25 ? 'Light day'
+    : 'Getting started';
+
+  // Quick summary
+  const topAppNames = apps.slice(0, 2).map(a => a.name).join(' and ');
+  const peakFormatted = peakHour > 12 ? `${peakHour - 12} PM` : peakHour === 12 ? '12 PM' : peakHour === 0 ? '12 AM' : `${peakHour} AM`;
+  let quickSummary = '';
+  if (totalMin > 0) {
+    quickSummary = `You tracked ${formatDuration(totalMin)}`;
+    if (workMin > 0) quickSummary += `, worked ${formatDuration(workMin)}`;
+    if (topAppNames) quickSummary += ` mostly in ${topAppNames}`;
+    if (peakHour > 0 && workMin > 30) quickSummary += `. Peak focus: ${peakFormatted}`;
+    quickSummary += '.';
+  }
+
+  // Distraction
+  const distractionMin = entertainmentMin + (focusQuality.distraction_minutes || 0);
+  const distractionDisplay = distractionMin > 0 ? formatDuration(distractionMin) : '0m';
+  const distractionColor = distractionMin > 60 ? '#ef4444' : distractionMin > 30 ? '#f59e0b' : '#22c55e';
+
+  // ===== STACKED TIME DISTRIBUTION BAR =====
+  // Ensure minimum 1% width for non-zero categories so they're visible
+  const safeWorkPct = workMin > 0 ? Math.max(1, workPct) : 0;
+  const safeLearningPct = learningMin > 0 ? Math.max(1, learningPct) : 0;
+  const safeBrowsePct = browsingMin > 0 ? Math.max(1, browsePct) : 0;
+  const safeEntPct = entertainmentMin > 0 ? Math.max(1, entertainmentPct) : 0;
+  // Normalize to 100
+  const barTotal = safeWorkPct + safeLearningPct + safeBrowsePct + safeEntPct;
+  const normWork = barTotal > 0 ? Math.round(safeWorkPct / barTotal * 100) : 25;
+  const normLearn = barTotal > 0 ? Math.round(safeLearningPct / barTotal * 100) : 25;
+  const normBrowse = barTotal > 0 ? Math.round(safeBrowsePct / barTotal * 100) : 25;
+  const normEnt = 100 - normWork - normLearn - normBrowse; // remainder to avoid rounding errors
+
+  // ===== QUICKCHART IMAGE URLS =====
+  // QuickChart uses Chart.js v2 by default with chartjs-plugin-datalabels built-in.
+  // We use v2 syntax for full compatibility. Dark backgrounds, light text throughout.
+
+  // Filter out zero-value categories for cleaner donut
+  const donutCategories = [
+    { label: 'Work', value: workMin, color: '#3b82f6' },
+    { label: 'Learning', value: learningMin, color: '#a855f7' },
+    { label: 'Browsing', value: browsingMin, color: '#6b7280' },
+    { label: 'Entertainment', value: entertainmentMin, color: '#f59e0b' }
+  ].filter(c => c.value > 0);
+
+  const donutConfig = {
+    type: 'doughnut',
+    data: {
+      labels: donutCategories.map(c => `${c.label} ${formatDuration(c.value)}`),
+      datasets: [{
+        data: donutCategories.map(c => c.value),
+        backgroundColor: donutCategories.map(c => c.color),
+        borderColor: '#111111',
+        borderWidth: 3
+      }]
+    },
+    options: {
+      legend: {
+        position: 'bottom',
+        labels: { fontColor: '#d4d4d4', fontSize: 11, padding: 12, usePointStyle: true, pointStyle: 'circle' }
+      },
+      cutoutPercentage: 60,
+      layout: { padding: { top: 6, bottom: 2, left: 6, right: 6 } },
+      plugins: {
+        datalabels: {
+          color: '#ffffff',
+          font: { size: 11, weight: 'bold' },
+          formatter: '__FN_DONUT__'
+        }
+      }
+    }
+  };
+  // Use QuickChart's string-function support for the datalabels formatter
+  const donutConfigStr = JSON.stringify(donutConfig)
+    .replace('"formatter":"__FN_DONUT__"', 'formatter:(value,ctx)=>{let t=ctx.dataset.data.reduce((a,b)=>a+b,0);let p=Math.round(value/t*100);return p>=8?p+"%":""}');
+  const donutChartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(donutConfigStr)}&w=320&h=280&bkg=%23111111&devicePixelRatio=2&f=png`;
+
+  // Horizontal bar chart: top apps (v2 uses 'horizontalBar' type)
+  const appChartApps = apps.slice(0, 6);
+  const catColors = { work: '#3b82f6', learning: '#a855f7', browsing: '#6b7280', entertainment: '#f59e0b' };
+  const appsConfig = {
+    type: 'horizontalBar',
+    data: {
+      labels: appChartApps.map(a => a.name.length > 22 ? a.name.slice(0, 20) + '...' : a.name),
+      datasets: [{
+        data: appChartApps.map(a => a.minutes),
+        backgroundColor: appChartApps.map(a => catColors[a.category] || '#6b7280'),
+        borderWidth: 0,
+        barPercentage: 0.65,
+        categoryPercentage: 0.8
+      }]
+    },
+    options: {
+      legend: { display: false },
+      scales: {
+        xAxes: [{
+          gridLines: { color: '#1f1f1f', zeroLineColor: '#1f1f1f', drawBorder: false },
+          ticks: { fontColor: '#525252', fontSize: 9, beginAtZero: true, maxTicksLimit: 5 }
+        }],
+        yAxes: [{
+          gridLines: { display: false, drawBorder: false },
+          ticks: { fontColor: '#d4d4d4', fontSize: 10, padding: 4 }
+        }]
+      },
+      layout: { padding: { top: 4, bottom: 4, left: 4, right: 30 } },
+      plugins: {
+        datalabels: {
+          anchor: 'end',
+          align: 'end',
+          color: '#a3a3a3',
+          font: { size: 10 },
+          formatter: '__FN_APPS__'
+        }
+      }
+    }
+  };
+  const appsConfigStr = JSON.stringify(appsConfig)
+    .replace('"__FN_APPS__"', '(v)=>v+"m"');
+  const appsChartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(appsConfigStr)}&w=380&h=220&bkg=%23111111&devicePixelRatio=2&f=png`;
+
+  // ===== TOP APPS with proportional bars =====
+  const maxAppMin = apps.length > 0 ? apps[0].minutes : 1;
   const topAppsHtml = apps.slice(0, 5).map((app, i) => {
     const icon = getAppIcon(app.name, app.category);
     const catColor = { 'work': '#3b82f6', 'learning': '#a855f7', 'browsing': '#6b7280', 'entertainment': '#f59e0b' }[app.category] || '#6b7280';
-    const borderBottom = i < 4 ? 'border-bottom: 1px solid #222222;' : '';
+    const barWidth = Math.max(4, Math.round(app.minutes / maxAppMin * 100));
+    const borderBottom = i < Math.min(apps.length, 5) - 1 ? 'border-bottom: 1px solid #1a1a1a;' : '';
     return `
                                 <tr>
-                                    <td style="padding: 12px 16px; ${borderBottom}" bgcolor="#111111">
+                                    <td style="padding: 10px 16px; ${borderBottom}" bgcolor="#111111">
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                                             <tr>
-                                                <td width="30" style="font-size: 16px; color: #ededed;" bgcolor="#111111">${icon}</td>
-                                                <td style="color: #ededed; font-size: 14px;" bgcolor="#111111">${app.name}</td>
-                                                <td width="50" style="text-align: right; font-family: monospace; font-size: 13px; font-weight: 600; color: ${catColor};" bgcolor="#111111">${app.minutes}m</td>
+                                                <td width="28" style="font-size: 15px; vertical-align: middle;" bgcolor="#111111">${icon}</td>
+                                                <td style="padding-left: 8px; vertical-align: middle;" bgcolor="#111111">
+                                                    <div style="color: #ededed; font-size: 13px; font-weight: 500; margin-bottom: 5px;">${app.name}</div>
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0;">
+                                                        <tr>
+                                                            <td width="${barWidth}%" bgcolor="${catColor}" style="height: 4px; border-radius: 2px; line-height: 4px; font-size: 4px;">&nbsp;</td>
+                                                            <td bgcolor="#111111" style="height: 4px; line-height: 4px; font-size: 4px;">&nbsp;</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                                <td width="48" style="text-align: right; font-family: monospace; font-size: 13px; font-weight: 600; color: ${catColor}; vertical-align: middle;" bgcolor="#111111">${app.minutes}m</td>
                                             </tr>
                                         </table>
                                     </td>
                                 </tr>`;
   }).join('');
 
-  // Generate Timeline HTML - show top activities by duration
+  // ===== TIMELINE =====
   const timelineHtml = timeline
-    .filter(item => item.duration_mins >= 1)  // Only show >= 1 minute
-    .slice(0, 8)  // Show top 8 activities
+    .filter(item => item.duration_mins >= 1)
+    .slice(0, 6)
     .map(item => {
       const catColor = { 'work': '#3b82f6', 'learning': '#a855f7', 'browsing': '#6b7280', 'entertainment': '#f59e0b' }[item.category] || '#6b7280';
       const icon = getAppIcon(item.app, item.category);
       const taskText = item.task || 'Activity';
-
-      // Format duration in a more readable way
-      let durationDisplay = `${item.duration_mins}m`;
-      if (item.duration_mins >= 60) {
-        const hours = Math.floor(item.duration_mins / 60);
-        const mins = item.duration_mins % 60;
-        durationDisplay = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-      }
+      const durationDisplay = formatDuration(item.duration_mins);
+      const startTime = item.start || '';
 
       return `
-                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 10px; background-color: #1a1a1a; border-left: 3px solid ${catColor}; border-radius: 0 8px 8px 0;" bgcolor="#1a1a1a">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 6px; background-color: #111111; border-left: 3px solid ${catColor}; border-radius: 0 8px 8px 0;" bgcolor="#111111">
                                 <tr>
-                                    <td style="padding: 14px 16px;" bgcolor="#1a1a1a">
+                                    <td style="padding: 10px 14px;" bgcolor="#111111">
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                                             <tr>
-                                                <td width="32" style="font-size: 18px; vertical-align: top;" bgcolor="#1a1a1a">${icon}</td>
-                                                <td style="padding-left: 10px;" bgcolor="#1a1a1a">
-                                                    <div style="font-weight: 600; color: #ededed; font-size: 15px;">${item.app}</div>
-                                                    <div style="font-size: 13px; color: #a3a3a3; margin-top: 3px; line-height: 1.4;">${taskText.substring(0, 70)}${taskText.length > 70 ? '...' : ''}</div>
+                                                <td width="28" style="font-size: 16px; vertical-align: top;" bgcolor="#111111">${icon}</td>
+                                                <td style="padding-left: 8px;" bgcolor="#111111">
+                                                    <div style="font-weight: 600; color: #ededed; font-size: 13px;">${item.app}${startTime ? `<span style="font-weight: 400; color: #525252; font-size: 11px; margin-left: 6px;">${startTime}</span>` : ''}</div>
+                                                    <div style="font-size: 12px; color: #737373; margin-top: 2px; line-height: 1.4;">${taskText.substring(0, 70)}${taskText.length > 70 ? '...' : ''}</div>
                                                 </td>
-                                                <td width="60" style="text-align: right; vertical-align: top;" bgcolor="#1a1a1a">
-                                                    <div style="font-family: monospace; font-size: 16px; font-weight: 600; color: ${catColor};">${durationDisplay}</div>
+                                                <td width="50" style="text-align: right; vertical-align: top;" bgcolor="#111111">
+                                                    <div style="font-family: monospace; font-size: 13px; font-weight: 600; color: ${catColor};">${durationDisplay}</div>
                                                 </td>
                                             </tr>
                                         </table>
@@ -217,10 +413,108 @@ function generateReportHTML(summary, userName = 'there') {
                             </table>`;
     }).join('');
 
-  // Generate Insights HTML
+  // ===== WEEKLY BAR COMPARISON =====
+  let weeklyBarsHtml = '';
+  if (weeklyComp && weeklyComp.has_history) {
+    const maxWork = Math.max(weeklyComp.current_work, weeklyComp.avg_work, 1);
+    const maxTotal = Math.max(weeklyComp.current_total, weeklyComp.avg_total, 1);
+    const todayWorkW = Math.max(5, Math.round(weeklyComp.current_work / maxWork * 100));
+    const avgWorkW = Math.max(5, Math.round(weeklyComp.avg_work / maxWork * 100));
+    const todayTotalW = Math.max(5, Math.round(weeklyComp.current_total / maxTotal * 100));
+    const avgTotalW = Math.max(5, Math.round(weeklyComp.avg_total / maxTotal * 100));
+
+    weeklyBarsHtml = `
+                    <tr>
+                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 14px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                Weekly Trends
+                            </p>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                <tr>
+                                    <td style="padding: 16px 18px; border-bottom: 1px solid #1a1a1a;" bgcolor="#111111">
+                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 10px;">Work Time</div>
+                                        <!-- Today bar -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 6px;">
+                                            <tr>
+                                                <td width="46" style="font-size: 11px; color: #a3a3a3; vertical-align: middle;" bgcolor="#111111">Today</td>
+                                                <td style="padding: 0 8px; vertical-align: middle;" bgcolor="#111111">
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                                        <tr>
+                                                            <td width="${todayWorkW}%" bgcolor="#3b82f6" style="height: 8px; border-radius: 4px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                            <td bgcolor="#111111" style="height: 8px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                                <td width="42" style="font-family: monospace; font-size: 12px; font-weight: 600; color: #3b82f6; text-align: right; vertical-align: middle;" bgcolor="#111111">${formatDuration(weeklyComp.current_work)}</td>
+                                            </tr>
+                                        </table>
+                                        <!-- Average bar -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td width="46" style="font-size: 11px; color: #525252; vertical-align: middle;" bgcolor="#111111">Avg</td>
+                                                <td style="padding: 0 8px; vertical-align: middle;" bgcolor="#111111">
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                                        <tr>
+                                                            <td width="${avgWorkW}%" bgcolor="#1e3a5f" style="height: 8px; border-radius: 4px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                            <td bgcolor="#111111" style="height: 8px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                                <td width="42" style="font-family: monospace; font-size: 12px; color: #525252; text-align: right; vertical-align: middle;" bgcolor="#111111">${formatDuration(weeklyComp.avg_work)}</td>
+                                            </tr>
+                                        </table>
+                                        <div style="font-size: 11px; color: ${weeklyComp.work_diff >= 0 ? '#22c55e' : '#ef4444'}; margin-top: 8px;">
+                                            ${weeklyComp.work_diff >= 0 ? '&#9650;' : '&#9660;'} ${Math.abs(weeklyComp.work_diff)}m ${weeklyComp.work_diff >= 0 ? 'more' : 'less'} than ${weeklyComp.days_compared}-day avg
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 16px 18px;" bgcolor="#111111">
+                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 10px;">Total Time</div>
+                                        <!-- Today bar -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 6px;">
+                                            <tr>
+                                                <td width="46" style="font-size: 11px; color: #a3a3a3; vertical-align: middle;" bgcolor="#111111">Today</td>
+                                                <td style="padding: 0 8px; vertical-align: middle;" bgcolor="#111111">
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                                        <tr>
+                                                            <td width="${todayTotalW}%" bgcolor="#22c55e" style="height: 8px; border-radius: 4px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                            <td bgcolor="#111111" style="height: 8px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                                <td width="42" style="font-family: monospace; font-size: 12px; font-weight: 600; color: #22c55e; text-align: right; vertical-align: middle;" bgcolor="#111111">${formatDuration(weeklyComp.current_total)}</td>
+                                            </tr>
+                                        </table>
+                                        <!-- Average bar -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td width="46" style="font-size: 11px; color: #525252; vertical-align: middle;" bgcolor="#111111">Avg</td>
+                                                <td style="padding: 0 8px; vertical-align: middle;" bgcolor="#111111">
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                                        <tr>
+                                                            <td width="${avgTotalW}%" bgcolor="#0f3d1f" style="height: 8px; border-radius: 4px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                            <td bgcolor="#111111" style="height: 8px; line-height: 8px; font-size: 8px;">&nbsp;</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                                <td width="42" style="font-family: monospace; font-size: 12px; color: #525252; text-align: right; vertical-align: middle;" bgcolor="#111111">${formatDuration(weeklyComp.avg_total)}</td>
+                                            </tr>
+                                        </table>
+                                        <div style="font-size: 11px; color: ${weeklyComp.total_diff >= 0 ? '#22c55e' : '#ef4444'}; margin-top: 8px;">
+                                            ${weeklyComp.total_diff >= 0 ? '&#9650;' : '&#9660;'} ${Math.abs(weeklyComp.total_diff)}m ${weeklyComp.total_diff >= 0 ? 'more' : 'less'} than ${weeklyComp.days_compared}-day avg
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>`;
+  }
+
+  // Insights
   const insightsHtml = generateInsightsHTML(summary, workMin, totalMin, weeklyComp, focusQuality, deepWork);
 
-  // Dark-themed HTML template (email-compatible with table-based layout)
+  // ===== FULL TEMPLATE =====
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -236,87 +530,163 @@ function generateReportHTML(summary, userName = 'there') {
     
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #0a0a0a;" bgcolor="#0a0a0a">
         <tr>
-            <td align="center" style="padding: 20px 10px;" bgcolor="#0a0a0a">
+            <td align="center" style="padding: 24px 10px;" bgcolor="#0a0a0a">
                 
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 600px; background-color: #0a0a0a;" bgcolor="#0a0a0a">
                     
                     <!-- Header -->
                     <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                        <td style="padding: 0 20px 14px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 6px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.12em;">
                                 ${dayName}, ${fullDate}
                             </p>
-                            <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #ededed;">
+                            <h1 style="margin: 0; font-size: 22px; font-weight: 600; color: #ededed; line-height: 1.3;">
                                 Here's your <span style="color: #22c55e;">${dayName}</span>, ${displayName}
                             </h1>
                         </td>
                     </tr>
-                    
-                    <!-- Summary Box -->
+
+                    <!-- Quick Summary -->
+                    ${quickSummary ? `
                     <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 8px; border-left: 3px solid #22c55e;" bgcolor="#111111">
+                        <td style="padding: 0 20px 18px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0; font-size: 14px; color: #a3a3a3; line-height: 1.5;">
+                                ${quickSummary}
+                            </p>
+                        </td>
+                    </tr>
+                    ` : ''}
+
+                    <!-- Day Score Hero with score bar -->
+                    <tr>
+                        <td style="padding: 0 20px 20px;" bgcolor="#0a0a0a">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: ${scoreBg}; border-radius: 12px; border: 1px solid #1a1a1a;" bgcolor="${scoreBg}">
                                 <tr>
-                                    <td style="padding: 16px; color: #d4d4d4; font-size: 14px; line-height: 1.6;" bgcolor="#111111">
-                                        ${narrative.substring(0, 280)}${narrative.length > 280 ? '...' : ''}
+                                    <td style="padding: 22px 20px 18px;" bgcolor="${scoreBg}">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td width="90" style="text-align: center; vertical-align: top;" bgcolor="${scoreBg}">
+                                                    <div style="font-family: monospace; font-size: 52px; font-weight: 800; color: ${scoreColor}; line-height: 1;">
+                                                        ${prodScore}
+                                                    </div>
+                                                    <div style="font-size: 10px; color: #525252; text-transform: uppercase; letter-spacing: 0.12em; margin-top: 6px;">
+                                                        / 100
+                                                    </div>
+                                                    <!-- Score bar -->
+                                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="70" align="center" style="margin-top: 10px;">
+                                                        <tr>
+                                                            <td width="${prodScore}%" bgcolor="${scoreColor}" style="height: 4px; border-radius: 2px; line-height: 4px; font-size: 4px;">&nbsp;</td>
+                                                            <td bgcolor="#1a1a1a" style="height: 4px; border-radius: 0 2px 2px 0; line-height: 4px; font-size: 4px;">&nbsp;</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                                <td style="vertical-align: top; padding-left: 20px;" bgcolor="${scoreBg}">
+                                                    <div style="font-size: 15px; font-weight: 600; color: ${scoreColor}; margin-bottom: 8px;">
+                                                        ${scoreVerdict}
+                                                    </div>
+                                                    <div style="font-size: 13px; color: #a3a3a3; line-height: 1.55;">
+                                                        ${narrative.substring(0, 180)}${narrative.length > 180 ? '...' : ''}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Time Distribution Chart -->
+                    <tr>
+                        <td style="padding: 0 20px 20px;" bgcolor="#0a0a0a">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                <tr>
+                                    <td style="padding: 16px 18px;" bgcolor="#111111">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 12px;">
+                                            <tr>
+                                                <td style="font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;" bgcolor="#111111">Time Breakdown</td>
+                                                <td style="text-align: right; font-family: monospace; font-size: 13px; font-weight: 600; color: #ededed;" bgcolor="#111111">${formatDuration(totalMin)}</td>
+                                            </tr>
+                                        </table>
+                                        <!-- Stacked bar -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-radius: 6px; overflow: hidden;">
+                                            <tr>
+                                                ${workMin > 0 ? `<td width="${normWork}%" bgcolor="#3b82f6" style="height: 14px; line-height: 14px; font-size: 14px;">&nbsp;</td>` : ''}
+                                                ${learningMin > 0 ? `<td width="${normLearn}%" bgcolor="#a855f7" style="height: 14px; line-height: 14px; font-size: 14px;">&nbsp;</td>` : ''}
+                                                ${browsingMin > 0 ? `<td width="${normBrowse}%" bgcolor="#6b7280" style="height: 14px; line-height: 14px; font-size: 14px;">&nbsp;</td>` : ''}
+                                                ${entertainmentMin > 0 ? `<td width="${normEnt}%" bgcolor="#f59e0b" style="height: 14px; line-height: 14px; font-size: 14px;">&nbsp;</td>` : ''}
+                                            </tr>
+                                        </table>
+                                        <!-- Legend -->
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 14px;">
+                                            <tr>
+                                                <td width="50%" style="font-size: 12px; color: #a3a3a3; padding-bottom: 8px;" bgcolor="#111111">
+                                                    <span style="display: inline-block; width: 8px; height: 8px; background-color: #3b82f6; border-radius: 2px; margin-right: 6px; vertical-align: middle;">&nbsp;</span>
+                                                    Work <span style="color: #ededed; font-weight: 600;">${formatDuration(workMin)}</span> <span style="color: #525252;">${workPct}%</span>
+                                                </td>
+                                                <td width="50%" style="font-size: 12px; color: #a3a3a3; padding-bottom: 8px;" bgcolor="#111111">
+                                                    <span style="display: inline-block; width: 8px; height: 8px; background-color: #a855f7; border-radius: 2px; margin-right: 6px; vertical-align: middle;">&nbsp;</span>
+                                                    Learning <span style="color: #ededed; font-weight: 600;">${formatDuration(learningMin)}</span> <span style="color: #525252;">${learningPct}%</span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td width="50%" style="font-size: 12px; color: #a3a3a3;" bgcolor="#111111">
+                                                    <span style="display: inline-block; width: 8px; height: 8px; background-color: #6b7280; border-radius: 2px; margin-right: 6px; vertical-align: middle;">&nbsp;</span>
+                                                    Browsing <span style="color: #ededed; font-weight: 600;">${formatDuration(browsingMin)}</span> <span style="color: #525252;">${browsePct}%</span>
+                                                </td>
+                                                <td width="50%" style="font-size: 12px; color: #a3a3a3;" bgcolor="#111111">
+                                                    <span style="display: inline-block; width: 8px; height: 8px; background-color: #f59e0b; border-radius: 2px; margin-right: 6px; vertical-align: middle;">&nbsp;</span>
+                                                    Distraction <span style="color: ${distractionColor}; font-weight: 600;">${distractionDisplay}</span>
+                                                </td>
+                                            </tr>
+                                        </table>
                                     </td>
                                 </tr>
                             </table>
                         </td>
                     </tr>
                     
-                    <!-- Metrics Row 1 -->
+                    <!-- Interactive Charts (rendered via QuickChart.io) -->
                     <tr>
-                        <td style="padding: 0 16px 10px;" bgcolor="#0a0a0a">
+                        <td style="padding: 0 20px 20px;" bgcolor="#0a0a0a">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                                 <tr>
-                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
-                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #22c55e;">
-                                            ${formatDuration(totalMin)}
-                                        </div>
-                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Total Tracked</div>
+                                    <td width="46%" valign="top" bgcolor="#0a0a0a">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                            <tr>
+                                                <td style="padding: 14px 12px 4px; font-family: monospace; font-size: 10px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;" bgcolor="#111111">Time Split</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="text-align: center; padding: 0 4px 10px;" bgcolor="#111111">
+                                                    <img src="${donutChartUrl}" alt="Time distribution" width="260" style="max-width:100%;height:auto;border-radius:6px;" />
+                                                </td>
+                                            </tr>
+                                        </table>
                                     </td>
-                                    <td width="4%"></td>
-                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
-                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #3b82f6;">
-                                            ${formatDuration(workMin)}
-                                        </div>
-                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Work</div>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    
-                    <!-- Metrics Row 2 -->
-                    <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                                <tr>
-                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
-                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #f59e0b;">
-                                            ${browsePct}%
-                                        </div>
-                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Browsing</div>
-                                    </td>
-                                    <td width="4%"></td>
-                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
-                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #a855f7;">
-                                            ${formatDuration(learningMin)}
-                                        </div>
-                                        <div style="font-size: 11px; color: #888888; margin-top: 4px;">Learning</div>
+                                    <td width="8%" bgcolor="#0a0a0a">&nbsp;</td>
+                                    <td width="46%" valign="top" bgcolor="#0a0a0a">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                            <tr>
+                                                <td style="padding: 14px 12px 4px; font-family: monospace; font-size: 10px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;" bgcolor="#111111">Top Apps</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="text-align: center; padding: 0 4px 10px;" bgcolor="#111111">
+                                                    <img src="${appsChartUrl}" alt="Top apps" width="320" style="max-width:100%;height:auto;border-radius:6px;" />
+                                                </td>
+                                            </tr>
+                                        </table>
                                     </td>
                                 </tr>
                             </table>
                         </td>
                     </tr>
-                    
-                    <!-- Top Apps Section -->
+
+                    <!-- Top Apps Section with bars -->
                     ${apps.length > 0 ? `
                     <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
-                                Top Apps
+                        <td style="padding: 0 20px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 10px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                App Details
                             </p>
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
                                 ${topAppsHtml}
@@ -328,85 +698,47 @@ function generateReportHTML(summary, userName = 'there') {
                     <!-- Top Activities Section -->
                     ${timeline.length > 0 ? `
                     <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
-                                Top Activities
-                            </p>
-                            <p style="margin: 0 0 12px 0; font-size: 12px; color: #737373;">
-                                Your most significant activities, aggregated by app
+                        <td style="padding: 0 20px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 10px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                Activity Timeline
                             </p>
                             ${timelineHtml}
                         </td>
                     </tr>
                     ` : ''}
 
-                    <!-- Insights & Analytics Section -->
+                    <!-- Insights Section -->
                     <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
-                                💡 Insights & Recommendations
-                            </p>
-                            <p style="margin: 0 0 12px 0; font-size: 12px; color: #737373;">
-                                Personalized insights from your activity patterns
+                        <td style="padding: 0 20px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 10px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                Insights
                             </p>
                             ${insightsHtml}
                         </td>
                     </tr>
 
-                    <!-- Focus & Context Section -->
+                    <!-- Focus Metrics -->
                     ${focusQuality && focusQuality.avg_session_length ? `
                     <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
-                                📊 Focus Metrics
-                            </p>
-                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
-                                <tr>
-                                    <td style="padding: 14px 18px; border-bottom: 1px solid #222222;" bgcolor="#111111">
-                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 4px;">Avg Session Length</div>
-                                        <div style="font-size: 18px; font-weight: 600; color: #ededed;">${focusQuality.avg_session_length}m</div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 14px 18px; border-bottom: 1px solid #222222;" bgcolor="#111111">
-                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 4px;">Context Switches</div>
-                                        <div style="font-size: 18px; font-weight: 600; color: ${summary.context_switches > 50 ? '#f59e0b' : '#22c55e'};">${summary.context_switches}</div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 14px 18px;" bgcolor="#111111">
-                                        <div style="font-size: 11px; color: #888888; text-transform: uppercase; margin-bottom: 4px;">Focus Quality</div>
-                                        <div style="font-size: 18px; font-weight: 600; color: ${focusQuality.focus_quality_score >= 70 ? '#22c55e' : focusQuality.focus_quality_score >= 40 ? '#f59e0b' : '#ef4444'};">${focusQuality.focus_quality_score}/100</div>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    ` : ''}
-
-                    <!-- Weekly Comparison Section -->
-                    ${weeklyComp && weeklyComp.has_history ? `
-                    <tr>
-                        <td style="padding: 0 16px 20px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 12px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
-                                📈 Weekly Trends (${weeklyComp.days_compared}-Day Avg)
+                        <td style="padding: 0 20px 20px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 10px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">
+                                Focus Metrics
                             </p>
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                                 <tr>
-                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
-                                        <div style="font-size: 11px; color: #888888; margin-bottom: 6px;">WORK TIME</div>
-                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #3b82f6;">${weeklyComp.current_work}m</div>
-                                        <div style="font-size: 12px; color: ${weeklyComp.work_diff >= 0 ? '#22c55e' : '#ef4444'}; margin-top: 4px;">
-                                            ${weeklyComp.work_diff >= 0 ? '▲' : '▼'} ${Math.abs(weeklyComp.work_diff)}m vs avg (${weeklyComp.avg_work}m)
-                                        </div>
+                                    <td width="31%" style="padding: 14px 10px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-family: monospace; font-size: 20px; font-weight: 700; color: #ededed;">${focusQuality.avg_session_length}m</div>
+                                        <div style="font-size: 10px; color: #525252; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Avg Session</div>
                                     </td>
-                                    <td width="4%"></td>
-                                    <td width="48%" style="padding: 16px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
-                                        <div style="font-size: 11px; color: #888888; margin-bottom: 6px;">TOTAL TIME</div>
-                                        <div style="font-family: monospace; font-size: 24px; font-weight: 700; color: #22c55e;">${weeklyComp.current_total}m</div>
-                                        <div style="font-size: 12px; color: ${weeklyComp.total_diff >= 0 ? '#22c55e' : '#ef4444'}; margin-top: 4px;">
-                                            ${weeklyComp.total_diff >= 0 ? '▲' : '▼'} ${Math.abs(weeklyComp.total_diff)}m vs avg (${weeklyComp.avg_total}m)
-                                        </div>
+                                    <td width="3.5%"></td>
+                                    <td width="31%" style="padding: 14px 10px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-family: monospace; font-size: 20px; font-weight: 700; color: ${summary.context_switches > 50 ? '#f59e0b' : '#22c55e'};">${summary.context_switches}</div>
+                                        <div style="font-size: 10px; color: #525252; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Switches</div>
+                                    </td>
+                                    <td width="3.5%"></td>
+                                    <td width="31%" style="padding: 14px 10px; background-color: #111111; border-radius: 10px; text-align: center;" bgcolor="#111111">
+                                        <div style="font-family: monospace; font-size: 20px; font-weight: 700; color: ${focusQuality.focus_quality_score >= 70 ? '#22c55e' : focusQuality.focus_quality_score >= 40 ? '#f59e0b' : '#ef4444'};">${focusQuality.focus_quality_score}</div>
+                                        <div style="font-size: 10px; color: #525252; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em;">Focus Score</div>
                                     </td>
                                 </tr>
                             </table>
@@ -414,21 +746,51 @@ function generateReportHTML(summary, userName = 'there') {
                     </tr>
                     ` : ''}
 
+                    <!-- Weekly Trends with bar comparison -->
+                    ${weeklyBarsHtml}
+
+                    <!-- CTA Button - links to local dashboard -->
+                    <tr>
+                        <td style="padding: 8px 20px 28px;" bgcolor="#0a0a0a">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                <tr>
+                                    <td style="padding: 24px 20px; text-align: center;" bgcolor="#111111">
+                                        <p style="margin: 0 0 14px 0; font-size: 14px; color: #a3a3a3; line-height: 1.5;">
+                                            Explore your full timeline, interactive charts, and date range comparisons.
+                                        </p>
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+                                            <tr>
+                                                <td bgcolor="#22c55e" style="border-radius: 8px; mso-padding-alt: 0;">
+                                                    <!--[if mso]><i style="letter-spacing:32px;mso-font-width:-100%;mso-text-raise:24pt" hidden>&nbsp;</i><![endif]-->
+                                                    <a href="http://localhost:5555/dashboard?date=${summary.date}" target="_blank" style="display: inline-block; padding: 13px 36px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; color: #0a0a0a; text-decoration: none; letter-spacing: 0.02em;">
+                                                        Explore Full Report &#8594;
+                                                    </a>
+                                                    <!--[if mso]><i style="letter-spacing:32px;mso-font-width:-100%" hidden>&nbsp;</i><![endif]-->
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <p style="margin: 10px 0 0 0; font-size: 11px; color: #404040; line-height: 1.5;">
+                                            Requires Telos to be running on your machine.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 24px 16px; border-top: 1px solid #262626; text-align: center;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 13px; color: #525252;">
+                        <td style="padding: 0 20px 20px; text-align: center;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 12px; color: #333333;">
                                 <span style="color: #22c55e; font-weight: 600;">telos</span> &middot; daily report
                             </p>
-                            <p style="margin: 0 0 12px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; color: #404040;">
+                            <p style="margin: 0 0 6px 0; font-size: 11px; color: #333333; line-height: 1.5;">
                                 Your data is encrypted and stored under an anonymous identifier.
                             </p>
-                            <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px; color: #404040;">
-                                To change report timing or turn off emails, open Telos and go to Settings.
-                                <br/>
-                                <a href="mailto:support@telos.dev?subject=Unsubscribe%20from%20daily%20reports" style="color: #525252; text-decoration: underline;">Unsubscribe</a>
+                            <p style="margin: 0; font-size: 11px; color: #333333; line-height: 1.8;">
+                                <a href="mailto:support@telos.dev?subject=Unsubscribe%20from%20daily%20reports" style="color: #404040; text-decoration: underline;">Unsubscribe</a>
                                 &middot;
-                                <a href="https://telos.app/privacy" style="color: #525252; text-decoration: underline;">Privacy Policy</a>
+                                <a href="https://telos.app/privacy" style="color: #404040; text-decoration: underline;">Privacy</a>
                             </p>
                         </td>
                     </tr>
@@ -499,7 +861,7 @@ Reply to this email for support.
  * @param {number} maxRetries - Maximum retry attempts (default: 3)
  * @returns {object} Result with success status
  */
-export async function sendDailyReport(userEmail, summary, userName = null, maxRetries = 3) {
+export async function sendDailyReport(userEmail, summary, userName = null, maxRetries = 3, reportUrl = null) {
   await initializeSendGrid();
 
   const date = new Date(summary.date).toLocaleDateString('en-US', {
@@ -514,10 +876,14 @@ export async function sendDailyReport(userEmail, summary, userName = null, maxRe
       email: process.env.SENDGRID_FROM_EMAIL || 'reports@telos.dev',
       name: process.env.SENDGRID_FROM_NAME || 'Telos'
     },
-    replyTo: 'support@telos.dev',
-    subject: `Daily Activity Report - ${date}`,
+    replyTo: 'anuragkurle27@gmail.com',
+    subject: generateSubjectLine(summary),
     text: generatePlainText(summary),
-    html: generateReportHTML(summary, userName)
+    html: generateReportHTML(summary, userName, reportUrl),
+    headers: {
+      'List-Unsubscribe': `<mailto:support@telos.dev?subject=Unsubscribe%20${encodeURIComponent(userEmail)}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+    }
   };
 
   // Retry logic for transient failures
@@ -605,7 +971,7 @@ export async function sendDailyReports(force = false) {
           const originalDateStr = dateStr; // Track what we originally wanted
 
           let summarySnapshot = await db.collection('daily_summaries')
-            .where('userEmail', '==', userEmail)
+            .where('userId', '==', user.uid)
             .where('date', '==', dateStr)
             .limit(1)
             .get();
@@ -692,8 +1058,19 @@ export async function sendDailyReports(force = false) {
             summaryData.daily_narrative = `⚠️ Note: This report uses data from ${dateStr} (${dataAge} day${dataAge > 1 ? 's' : ''} old). Recent data not available.\n\n` + summaryData.daily_narrative;
           }
 
+          // Generate web report URL for CTA button
+          let reportUrl = null;
+          try {
+            const reportId = summaryRef.id;
+            const token = await generateViewToken(reportId);
+            const backendUrl = process.env.BACKEND_URL || `https://telos-backend-${process.env.FIREBASE_PROJECT_ID || 'gen-lang-client-0772617718'}.run.app`;
+            reportUrl = `${backendUrl}/r/${reportId}?t=${token}`;
+          } catch (e) {
+            console.warn(`[EMAIL] Could not generate report URL:`, e.message);
+          }
+
           // Send email
-          const result = await sendDailyReport(userEmail, summaryData);
+          const result = await sendDailyReport(userEmail, summaryData, null, 3, reportUrl);
 
           if (result.success) {
             // Mark as sent

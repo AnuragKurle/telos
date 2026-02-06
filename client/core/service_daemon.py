@@ -118,6 +118,16 @@ class ServiceDaemon:
             self.email_thread.start()
             print("✓ Email worker started")
 
+        # Start local web dashboard
+        try:
+            from core.dashboard_server import DashboardServer
+            db_path = self.config.get('storage', 'database_path')
+            dashboard_port = self.config.get('dashboard', 'port', default=5555)
+            self.dashboard_server = DashboardServer(db_path, port=int(dashboard_port))
+            self.dashboard_server.start()
+        except Exception as e:
+            print(f"[Dashboard] Failed to start: {e}")
+
         print("✓ Service daemon running")
 
     def stop(self):

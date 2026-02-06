@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight, Loader2, Check, Monitor, Apple } from "lucide-react";
 import { TypewriterEffect } from "./TypewriterEffect";
@@ -12,6 +12,26 @@ export function Hero() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+
+  // Capture referral code from URL on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get("ref");
+      if (ref && ref.startsWith("TELOS-")) {
+        setReferralCode(ref);
+        // Store in localStorage for persistence across page navigations
+        localStorage.setItem("telos_referral_code", ref);
+      } else {
+        // Check localStorage for previously stored referral code
+        const stored = localStorage.getItem("telos_referral_code");
+        if (stored && stored.startsWith("TELOS-")) {
+          setReferralCode(stored);
+        }
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +46,8 @@ export function Hero() {
       await setDoc(doc(db, "waitlist", safeEmail), {
         email: safeEmail,
         timestamp: serverTimestamp(),
-        source: "landing_page",
+        source: referralCode ? `referral_${referralCode}` : "landing_page",
+        ...(referralCode && { referralCode }),
       });
       setStatus("success");
       setEmail("");
@@ -113,9 +134,15 @@ export function Hero() {
             Error: {errorMsg || "Connection failed. Check your network."}
           </div>
         )}
-        <p className="text-xs text-neutral-600 mt-4">
-          7-day free trial • Then $3/month • Installs in 30 seconds
-        </p>
+        {referralCode ? (
+          <p className="text-xs text-neutral-400 mt-4">
+            <span className="text-purple-400">Referred by a friend</span> • <span className="text-terminal-green font-semibold">14-day extended trial</span> • Then $3/month
+          </p>
+        ) : (
+          <p className="text-xs text-neutral-600 mt-4">
+            7-day free trial • Then $3/month • Installs in 30 seconds
+          </p>
+        )}
       </div>
 
       {/* Terminal Demo */}

@@ -7,6 +7,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { initializeFirebase } from './config/firebase.js';
 import analyzeRoutes from './routes/analyze.js';
@@ -14,6 +15,9 @@ import authRoutes from './routes/auth.js';
 import feedbackRoutes from './routes/feedback.js';
 import reportsRoutes from './routes/reports.js';
 import checkoutRoutes from './routes/checkout.js';
+import referralRoutes from './routes/referral.js';
+import adminRoutes from './routes/admin.js';
+import webReportRoutes from './routes/webReport.js';
 import { startScheduler } from './services/scheduler.js';
 import { initializeEncryption } from './services/encryption.js';
 import { initializeSendGrid } from './services/email.js';
@@ -40,7 +44,10 @@ initializeEncryption().catch(err => {
 initializeSendGrid().then(() => {
   console.log('[STARTUP] SendGrid ready');
 }).catch(err => {
-  console.warn('[STARTUP] SendGrid initialization deferred:', err.message);
+  console.error('[STARTUP] *** SENDGRID INITIALIZATION FAILED ***');
+  console.error('[STARTUP] Email reports will NOT work until this is fixed.');
+  console.error('[STARTUP] Error:', err.message);
+  console.error('[STARTUP] Ensure SENDGRID_API_KEY secret exists in GCP Secret Manager');
 });
 
 // Start Background Scheduler
@@ -61,14 +68,39 @@ app.use(getTracingHandler());
 // Performance monitoring middleware (tracks slow requests and errors)
 app.use(createPerformanceMonitoringMiddleware());
 
-// Middleware
-app.use(cors());
+// Security headers
+app.use(helmet());
+
+// CORS - restrict to known origins
+const allowedOrigins = [
+  'https://telos.dev',
+  'https://www.telos.dev',
+  'https://telos.app',
+  'https://www.telos.app',
+  'https://gen-lang-client-0772617718.web.app',
+  'https://gen-lang-client-0772617718.firebaseapp.com',
+  ...(process.env.NODE_ENV === 'development' ? ['http://localhost:3000', 'http://localhost:8080'] : []),
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (server-to-server, curl, mobile clients, desktop clients)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Client-Version'],
+  credentials: true,
+}));
 
 // Dodo Payments webhook needs raw body, so handle it before JSON parser
 app.use('/v1/checkout/webhook', express.raw({ type: 'application/json' }));
 
-// JSON parser forall other routes
-app.use(express.json());
+// JSON parser for all other routes (with size limit to prevent abuse)
+app.use(express.json({ limit: '1mb' }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -96,6 +128,9 @@ app.use('/v1/auth', authRoutes);
 app.use('/v1/feedback', feedbackRoutes);
 app.use('/v1/reports', reportsRoutes);
 app.use('/v1/checkout', checkoutRoutes);
+app.use('/v1/referral', referralRoutes);
+app.use('/v1/admin', adminRoutes);
+app.use('/r', webReportRoutes);  // Web report viewer (no auth, token-based access from email)
 
 // 404 handler
 app.use((req, res) => {

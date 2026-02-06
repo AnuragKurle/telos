@@ -84,14 +84,6 @@ class DashboardScreen(FeedbackMixin, Screen):
         height: 2;
     }
 
-    #graph-tabs {
-        height: 1;
-        text-align: right;
-        color: $text-muted;
-        padding: 0 1;
-        margin-bottom: 0;
-    }
-
     #middle-section {
         height: 14;
         margin-bottom: 1;
@@ -186,7 +178,6 @@ class DashboardScreen(FeedbackMixin, Screen):
             yield Static(self.get_greeting(), id="greeting")
             yield CurrentActivity(id="current-activity")
             
-            yield Static(self._get_graph_tabs_text(), id="graph-tabs")
             with Horizontal(id="middle-section"):
                 yield CategoryBreakdown(id="category-breakdown")
                 yield ActivityWaveform(id="waveform-graph")
@@ -210,7 +201,6 @@ class DashboardScreen(FeedbackMixin, Screen):
     def watch_graph_mode(self, old_mode: str, new_mode: str) -> None:
         """Update visibility when graph mode changes."""
         self._update_graph_visibility()
-        self._update_graph_tabs()
 
     def _update_graph_visibility(self) -> None:
         """Show/hide graphs based on current mode."""
@@ -226,20 +216,6 @@ class DashboardScreen(FeedbackMixin, Screen):
                 day_heatmap.remove_class("hidden")
         except:
             pass  # Widgets not yet mounted
-
-    def _get_graph_tabs_text(self) -> str:
-        """Get the graph tab indicator text."""
-        if self.graph_mode == "day":
-            return "[bold]Day View[/bold] │ [dim]60min View[/dim]  (V: switch)"
-        else:
-            return "[dim]Day View[/dim] │ [bold]60min View[/bold]  (V: switch)"
-
-    def _update_graph_tabs(self) -> None:
-        """Update the graph tab labels."""
-        try:
-            self.query_one("#graph-tabs", Static).update(self._get_graph_tabs_text())
-        except Exception:
-            pass
 
     def action_toggle_graph_mode(self) -> None:
         """Toggle between 60-minute waveform and full day heatmap."""

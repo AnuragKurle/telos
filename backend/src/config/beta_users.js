@@ -1,17 +1,21 @@
 /**
  * Beta Access Whitelist
  * 
- * Only emails in this list are allowed to activate the trial.
- * Add emails here to grant access.
+ * Beta user whitelist is now managed via Firestore 'waitlist' collection
+ * and the admin dashboard. This file is kept for backwards compatibility.
+ * 
+ * To add beta users, use the admin dashboard or add entries to the
+ * 'waitlist' collection in Firestore directly.
+ * 
+ * For local development, set BETA_USERS env var as a comma-separated list.
  */
-export const betaUsers = [
-    // Internal / Test
-    "anurag@telos.app",
-    "test@example.com",
-    "anuragkurle27@gmail.com"
+const envUsers = process.env.BETA_USERS
+  ? process.env.BETA_USERS.split(',').map(e => e.trim().toLowerCase())
+  : [];
 
-    // Waitlist Users
-    // Add emails from Firestore 'waitlist' collection here manually
+export const betaUsers = [
+    "test@example.com",
+    ...envUsers,
 ];
 
 export default betaUsers;

@@ -89,7 +89,6 @@ class TelosApp(App):
         ("h", "show_help", "Help"),
         ("q", "quit", "Quit"),
         ("f", "show_feedback", "Feedback"),
-        ("ctrl+p", "command_palette", "Command Palette"),
     ]
 
     def __init__(self, config: ConfigManager):
@@ -181,6 +180,16 @@ class TelosApp(App):
         self.capture_worker = asyncio.create_task(capture_worker_task(self))
         self.db_worker = asyncio.create_task(db_polling_worker(self))
         self.session_worker = asyncio.create_task(session_worker_task(self))
+
+        # Start local web dashboard server
+        try:
+            from core.dashboard_server import DashboardServer
+            db_path = self.config.get('storage', 'database_path')
+            dashboard_port = self.config.get('dashboard', 'port', default=5555)
+            self.dashboard_server = DashboardServer(db_path, port=int(dashboard_port))
+            self.dashboard_server.start()
+        except Exception as e:
+            print(f"[APP] Dashboard server failed to start: {e}")
         
         # Start email worker if enabled
         email_enabled = self.config.get('email', 'enabled', default=False)

@@ -159,27 +159,62 @@ class DailyAggregator:
         if current_goal:
             goal_context = f"\nUser's Target Goal: {current_goal['focus']}"
 
-        prompt = f'''Generate a daily productivity summary for {date_str}.
+        work_min = stats.get('work', 0) // 60
+        learn_min = stats.get('learning', 0) // 60
+        browse_min = stats.get('browsing', 0) // 60
+        ent_min = stats.get('entertainment', 0) // 60
+        total_min = work_min + learn_min + browse_min + ent_min
+        productive_pct = round((work_min + learn_min) / max(total_min, 1) * 100)
 
-Daily Stats:
-- Work: {stats.get('work', 0)//60} mins
-- Learning: {stats.get('learning', 0)//60} mins
-- Browsing: {stats.get('browsing', 0)//60} mins
-- Entertainment: {stats.get('entertainment', 0)//60} mins
+        # Find top apps from sessions
+        app_time = {{}}
+        for s in sessions:
+            apps = (s.get('apps_used') or '').split(',')
+            dur = 0
+            if s.get('end_time') and s.get('start_time'):
+                try:
+                    dur = (datetime.fromisoformat(s['end_time']) - datetime.fromisoformat(s['start_time'])).total_seconds() / 60
+                except Exception:
+                    dur = 5
+            for a in apps:
+                a = a.strip()
+                if a:
+                    app_time[a] = app_time.get(a, 0) + dur
+        top_apps = ', '.join(f"{{k}} ({{int(v)}}m)" for k, v in sorted(app_time.items(), key=lambda x: -x[1])[:3])
 
-Session Timeline:
+        prompt = f'''You are a sharp, direct productivity analyst writing a daily email summary for {date_str}.
+
+HARD RULES:
+- Do NOT start with "The user started the day..." or any variation.
+- Do NOT be generic. No filler phrases like "a productive day" or "showing dedication."
+- Reference SPECIFIC apps and tasks by name.
+- Call out patterns: context switching, distraction spirals, deep work streaks.
+- Be honest. If they wasted time, say so directly.
+- Write in second person ("you", "your").
+- Keep it punchy: 3-4 sentences max. Every sentence must contain a concrete observation.
+
+ACTIVITY DATA:
+Total tracked: {total_min} minutes
+Work: {work_min}m | Learning: {learn_min}m | Browsing: {browse_min}m | Entertainment: {ent_min}m
+Productive: {work_min + learn_min}m ({productive_pct}% of total)
+Sessions: {len(sessions)}
+Top apps: {top_apps}
+
+SESSION TIMELINE:
 {chr(10).join(timeline)}
 {goal_context}
 
-Please provide:
-1. A "Daily Narrative": A cohesive 1-paragraph story of the day's work, highlighting flow, interruptions, and major accomplishments. Write in the third person (e.g. "The user started the day...").
-2. "Key Learnings": A list of bullet points (max 5) identifying habits, patterns, or specific knowledge gained.
-
-Output in JSON format:
+Generate JSON:
 {{
-  "daily_narrative": "...",
-  "key_learnings": ["...", "..."]
+  "daily_narrative": "3-4 punchy sentences. Specific app names, times, patterns. Honest, no filler.",
+  "key_learnings": [
+    "A specific behavioral pattern (e.g., 'You context-switched 8 times between 2-3 PM')",
+    "A concrete suggestion tied to their data (e.g., 'Your deepest work was before 10 AM — protect that window')",
+    "An honest observation about time allocation (e.g., '45 min YouTube between work blocks — that's your longest non-work stretch')"
+  ]
 }}
+
+Be the analyst they'd pay for, not a generic AI cheerleader.
 '''
         return prompt
 

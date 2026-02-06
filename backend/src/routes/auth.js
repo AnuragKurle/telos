@@ -3,12 +3,36 @@
  */
 
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { verifyFirebaseToken } from '../middleware/auth.js';
-import { sendSignupNotification, sendTrialActivationNotification, sendPaymentIntentNotification } from '../services/slack.js';
+import {
+  sendSignupNotification,
+  sendTrialActivationNotification,
+  sendPaymentIntentNotification,
+  sendReferralLinkUsedNotification,
+  sendReferralActivatedNotification,
+} from '../services/slack.js';
 import admin from 'firebase-admin';
 import betaUsers from '../config/beta_users.js';
+import { MAX_REFERRAL_CREDITS } from './referral.js';
 
 const router = express.Router();
+
+// IP-based rate limiter for auth endpoints (stricter than API rate limit)
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // 30 requests per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'RateLimitError',
+    message: 'Too many requests from this IP. Please try again later.',
+    code: 'IP_RATE_LIMIT_EXCEEDED',
+  },
+});
+
+// Apply rate limiter to all auth routes
+router.use(authRateLimiter);
 
 /**
  * POST /auth/link-email
@@ -163,7 +187,7 @@ router.get('/status', verifyFirebaseToken, async (req, res) => {
  */
 router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
   try {
-    const { email, mode } = req.body;
+    const { email, mode, referralCode } = req.body;
     const uid = req.user.uid;
     const userMode = mode || 'unknown';
 
@@ -174,7 +198,7 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
     const safeEmail = email.toLowerCase().trim();
 
     // Beta access: Allow all signups (whitelist removed for launch)
-    console.log(`[AUTH] Processing trial activation for: ${safeEmail}`);
+    console.log(`[AUTH] Processing trial activation for: ${safeEmail}${referralCode ? ` (referral: ${referralCode})` : ''}`);
 
     // 2. Fetch or Create User Document (keyed by UID for anonymity)
     const db = admin.firestore();
@@ -183,8 +207,16 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
 
     let accessStatus = 'trial'; // Default for new users
     let trialStartDate = new Date();
+
+    // Determine trial duration: 14 days for waitlist/referral users, 7 for others
+    const waitlistRef = db.collection('waitlist').doc(safeEmail);
+    const waitlistDoc = await waitlistRef.get();
+    const isWaitlistUser = waitlistDoc.exists;
+    const hasReferral = referralCode && referralCode.startsWith('TELOS-');
+    const trialDays = (isWaitlistUser || hasReferral) ? 14 : 7;
+
     let trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 7);
+    trialEndDate.setDate(trialEndDate.getDate() + trialDays);
 
     if (userDoc.exists) {
       const userData = userDoc.data();
@@ -207,7 +239,8 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
             activatedAt: admin.firestore.FieldValue.serverTimestamp(),
             startDate: admin.firestore.Timestamp.fromDate(trialStartDate),
             endDate: admin.firestore.Timestamp.fromDate(trialEndDate),
-            isActive: true
+            isActive: true,
+            extendedTrial: trialDays === 14,
           }
         });
         // Send Slack Notification for Backfill/New Activation
@@ -220,7 +253,7 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
 
     } else {
       // New User - Create Record (includes mode for analytics)
-      await userRef.set({
+      const newUserData = {
         email: safeEmail,
         uid: uid,
         accessStatus: 'trial',
@@ -231,21 +264,95 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
           activatedAt: admin.firestore.FieldValue.serverTimestamp(),
           startDate: admin.firestore.Timestamp.fromDate(trialStartDate),
           endDate: admin.firestore.Timestamp.fromDate(trialEndDate),
-          isActive: true
+          isActive: true,
+          extendedTrial: trialDays === 14,
         },
         paymentIntent: {
           hasRequestedUpgrade: false,
           requestCount: 0
+        },
+        referral: {
+          referredBy: null,
+          code: null,
+          referralCount: 0,
+          proCreditsEarned: 0,
+          proCreditsUsed: 0,
+        },
+      };
+
+      // Handle referral code if provided
+      if (hasReferral) {
+        const referrerSnapshot = await db.collection('users')
+          .where('referral.code', '==', referralCode.toUpperCase())
+          .limit(1)
+          .get();
+
+        if (!referrerSnapshot.empty) {
+          const referrerDoc = referrerSnapshot.docs[0];
+          const referrerData = referrerDoc.data();
+          const referrerUid = referrerDoc.id;
+          const referrerEmail = referrerData.email || 'unknown';
+
+          // Set referredBy on new user
+          newUserData.referral.referredBy = referralCode.toUpperCase();
+
+          // Create referral record
+          await db.collection('referrals').add({
+            referrerUid,
+            referrerEmail,
+            refereeUid: uid,
+            refereeEmail: safeEmail,
+            referralCode: referralCode.toUpperCase(),
+            status: 'trial_active',
+            proCreditAwarded: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // Award Pro credit to referrer (if under cap)
+          const currentCredits = referrerData.referral?.proCreditsEarned || 0;
+          if (currentCredits < MAX_REFERRAL_CREDITS) {
+            const newCredits = currentCredits + 1;
+            await db.collection('users').doc(referrerUid).update({
+              'referral.referralCount': admin.firestore.FieldValue.increment(1),
+              'referral.proCreditsEarned': admin.firestore.FieldValue.increment(1),
+            });
+
+            // Mark the referral as credit-awarded
+            const referralDocs = await db.collection('referrals')
+              .where('referrerUid', '==', referrerUid)
+              .where('refereeUid', '==', uid)
+              .limit(1)
+              .get();
+            if (!referralDocs.empty) {
+              await referralDocs.docs[0].ref.update({ proCreditAwarded: true });
+            }
+
+            // Slack: referral activated with credit
+            sendReferralActivatedNotification(referrerEmail, safeEmail, referralCode.toUpperCase(), newCredits).catch(console.error);
+          } else {
+            // Just count the referral but don't award credit (cap reached)
+            await db.collection('users').doc(referrerUid).update({
+              'referral.referralCount': admin.firestore.FieldValue.increment(1),
+            });
+
+            // Slack: referral used, but notify about cap
+            sendReferralLinkUsedNotification(referralCode.toUpperCase(), referrerEmail, safeEmail).catch(console.error);
+          }
+        } else {
+          console.warn(`[AUTH] Referral code ${referralCode} not found, ignoring`);
         }
-      });
+      }
+
+      await userRef.set(newUserData);
 
       // Update Waitlist Entry if it exists
-      const waitlistRef = db.collection('waitlist').doc(safeEmail);
-      const waitlistDoc = await waitlistRef.get();
-      if (waitlistDoc.exists) {
+      if (isWaitlistUser) {
         await waitlistRef.update({
           trialActivated: true,
-          trialStartDate: admin.firestore.FieldValue.serverTimestamp()
+          status: 'activated',
+          activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          uid: uid,
+          trialStartDate: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
 
@@ -257,7 +364,9 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
       access: true,
       accessStatus: accessStatus,
       trialStartDate: trialStartDate.toISOString(),
-      trialEndDate: trialEndDate.toISOString()
+      trialEndDate: trialEndDate.toISOString(),
+      trialDays,
+      extendedTrial: trialDays === 14,
     });
 
   } catch (error) {

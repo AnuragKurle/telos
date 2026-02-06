@@ -352,33 +352,67 @@ export async function generateDailyNarrative(sessions, categoryTotals, userGoal 
  */
 function buildNarrativePrompt(sessions, categoryTotals, userGoal) {
   const totalMinutes = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0) / 60;
+  const workMin = Math.round(categoryTotals.work / 60);
+  const learnMin = Math.round(categoryTotals.learning / 60);
+  const browseMin = Math.round(categoryTotals.browsing / 60);
+  const entMin = Math.round(categoryTotals.entertainment / 60);
+  const productiveMin = workMin + learnMin;
+  const productivePct = totalMinutes > 0 ? Math.round(productiveMin / Math.round(totalMinutes) * 100) : 0;
 
   const sessionsText = sessions.map(s =>
     `- ${s.start_time ? new Date(s.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}: ${s.app} - ${s.task} (${s.duration_mins}m, ${s.category})`
   ).join('\n');
 
-  const goalText = userGoal ? `\n\nUSER'S GOAL: ${userGoal}\nPlease reference their progress toward this goal in the narrative.` : '';
+  // Find longest work session
+  const workSessions = sessions.filter(s => s.category === 'work' || s.category === 'learning');
+  const longestWork = workSessions.sort((a, b) => (b.duration_mins || 0) - (a.duration_mins || 0))[0];
 
-  return `You are analyzing a user's daily activity and generating a personalized summary.
+  // Find most-used apps
+  const appTime = {};
+  sessions.forEach(s => { appTime[s.app] = (appTime[s.app] || 0) + (s.duration_mins || 0); });
+  const topApps = Object.entries(appTime).sort((a, b) => b[1] - a[1]).slice(0, 3).map(a => `${a[0]} (${a[1]}m)`).join(', ');
+
+  const goalText = userGoal ? `\nUSER'S CURRENT GOAL: "${userGoal}"\nYou MUST reference their progress toward this goal specifically.` : '';
+
+  return `You are a sharp, direct productivity analyst writing a daily email summary. Your job is to tell the user something they DON'T already know about their day — patterns, blind spots, and honest observations.
+
+HARD RULES:
+- Do NOT start with "The user started the day..." or any variation of that.
+- Do NOT be generic. No filler phrases like "a productive day" or "showing dedication."
+- Reference SPECIFIC apps and tasks by name.
+- Call out patterns: context switching, distraction spirals, deep work streaks.
+- Be honest. If they spent 30% of their time on social media, say so directly.
+- Write in second person ("you", "your") — this is a personal email to them.
+- Keep it punchy: 3-4 sentences max. Every sentence must contain a concrete observation.
 
 ACTIVITY DATA:
-Total active time: ${Math.round(totalMinutes)} minutes
-Work: ${Math.round(categoryTotals.work / 60)} minutes
-Learning: ${Math.round(categoryTotals.learning / 60)} minutes
-Browsing: ${Math.round(categoryTotals.browsing / 60)} minutes
-Entertainment: ${Math.round(categoryTotals.entertainment / 60)} minutes
+Total tracked time: ${Math.round(totalMinutes)} minutes
+Work: ${workMin}m | Learning: ${learnMin}m | Browsing: ${browseMin}m | Entertainment: ${entMin}m
+Productive time: ${productiveMin}m (${productivePct}% of total)
+Number of sessions: ${sessions.length}
+Top apps: ${topApps}${longestWork ? `\nLongest focused block: ${longestWork.app} — ${longestWork.task} (${longestWork.duration_mins}m)` : ''}
 
-SESSIONS (chronological):
+FULL SESSION TIMELINE (chronological):
 ${sessionsText}${goalText}
 
-Generate a JSON response with:
+Generate a JSON response:
 {
-  "daily_narrative": "A 2-3 sentence personalized summary of their day, highlighting patterns and key activities. Be encouraging and specific.",
-  "key_learnings": ["Learning 1", "Learning 2", "Learning 3"],  // Up to 3 specific things they worked on or learned
-  "productivity_score": 75  // 0-100 score based on work/learning vs browsing/entertainment ratio
+  "daily_narrative": "3-4 punchy sentences. Specific app names, times, patterns. No generic filler. Honest.",
+  "key_learnings": [
+    "A specific behavioral pattern you noticed (e.g., 'You context-switched 8 times between 2-3 PM — your focus fragmented after lunch')",
+    "A concrete suggestion tied to their data (e.g., 'Your deepest work happened before 10 AM — consider protecting that window')",
+    "An honest observation about time allocation (e.g., '45 minutes on YouTube between work blocks — that's almost as much as your longest focus session')"
+  ],
+  "productivity_score": 65
 }
 
-Make it personal, specific to their actual activities, and encouraging!`;
+The productivity_score should be 0-100 based on:
+- Ratio of work+learning to total (base)
+- Penalize heavy context switching
+- Reward long uninterrupted work blocks
+- Penalize if entertainment > 20% of total
+
+Be the analyst they'd pay for, not a generic AI cheerleader.`;
 }
 
 /**

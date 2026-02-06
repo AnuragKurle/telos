@@ -26,7 +26,7 @@ export async function getSecret(secretName, version = 'latest') {
   // 1. Try environment variable first (priority for local dev)
   if (process.env[secretName]) {
     console.log(`[SECRETS] Using environment variable for ${secretName}`);
-    return process.env[secretName];
+    return process.env[secretName].trim();
   }
 
   // Return cached value if available

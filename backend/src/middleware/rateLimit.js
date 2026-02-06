@@ -166,10 +166,14 @@ export async function rateLimitMiddleware(req, res, next) {
   } catch (error) {
     console.error('Rate limit check failed:', error);
     
-    // On Firestore error, fail open (allow request) but log error
-    // Better to allow one request through than block legitimate users
-    console.warn(`⚠️  Rate limit check failed for user ${uid}, allowing request`);
-    next();
+    // Fail closed: block the request when we can't verify rate limits
+    // This protects against unmetered API usage (Gemini costs) when Firestore is down
+    console.warn(`[RATE_LIMIT] Check failed for user ${uid}, blocking request`);
+    return res.status(503).json({
+      error: 'ServiceError',
+      message: 'Unable to verify rate limits. Please try again shortly.',
+      code: 'RATE_LIMIT_CHECK_FAILED',
+    });
   }
 }
 

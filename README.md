@@ -4,107 +4,123 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-AI-powered screen time tracker with intelligent activity analysis.
+AI-powered screen time tracker. Captures screenshots, analyzes them with Gemini Vision, and shows you where your time actually goes. Screenshots are analyzed in real-time and immediately deleted — only structured insights stay, encrypted and local.
 
-## What It Does
+## Monorepo Structure
 
-Telos captures screenshots, analyzes them with Gemini Vision AI, and gives you insights about your productivity. All data stays local - screenshots are analyzed and immediately deleted.
-
-## Features
-
-- **Intelligent Tracking** - AI understands what you're working on
-- **Smart Sessions** - Groups activities automatically
-- **AI Chat** - Query your work patterns naturally
-- **Daily Reports** - Email summaries via Gmail
-- **Terminal UI** - Clean, keyboard-driven interface
-- **Privacy-First** - Data never leaves your device
-
-## Quick Start
-
-### Option 1: pip install (Recommended)
-
-```bash
-pip install telos-tracker
-telos setup
-telos
-```
-
-### Option 2: From Source
-
-```bash
-cd client
-pip install -r requirements.txt
-python main.py setup
-python main.py
-```
-
-### Backend (Node.js)
-
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-## Repository Structure
+This is a monorepo with three independent components:
 
 ```
 telos/
-├── client/      Python TUI application
-├── backend/     Node.js API (Cloud Run)
-├── shared/      API contracts
-├── website/     Next.js waitlist site
-└── docs/        Documentation
+├── client/          # Python TUI app (pip install telos-tracker)
+├── backend/         # Node.js API on Google Cloud Run
+├── website/         # Next.js marketing site + admin dashboard
+├── docs/            # Architecture, deployment, decisions
+└── shared/          # API contracts between client & backend
 ```
 
-## Documentation
+### client/ — The Product
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/architecture.md) | System design and tech stack |
-| [Development](docs/development.md) | Local setup guide |
-| [Deployment](docs/deployment.md) | Cloud deployment |
-| [Roadmap](docs/roadmap.md) | Status and future plans |
-| [Decisions](docs/decisions.md) | Architecture rationale |
-| [API Contract](shared/api-contract.md) | Backend API spec |
+Python application with a terminal UI (Textual). This is what end users install and run.
 
-## Tech Stack
+- **Screen capture** → Gemini Vision analysis → SQLite storage
+- **TUI dashboard** with timeline, heatmaps, focus scores
+- **AI chat** — ask questions about your day in natural language
+- **Local web dashboard** at `localhost:5555` with interactive Chart.js charts
+- **Daily email reports** with embedded charts and AI-generated narratives
+- **MCP server** for Claude Desktop / Cursor integration
+- **Service mode** — runs headless in the background
 
-| Component | Technology |
-|-----------|------------|
-| Client | Python, Textual, SQLite |
-| Backend | Node.js, Express, Firebase |
-| AI | Google Gemini 2.5 Flash |
-| Hosting | Google Cloud Run |
+Install: `pip install telos-tracker && telos setup && telos`
 
-## Keyboard Shortcuts (TUI)
+### backend/ — The API
 
-| Key | Action |
-|-----|--------|
-| D | Dashboard |
-| T | Timeline |
-| S | Summary |
-| A | AI Chat |
-| G | Goals |
-| H | Help |
-| Q | Quit |
+Node.js + Express on Google Cloud Run. Handles:
 
-## Git Branches
+- Firebase Auth token validation
+- Screenshot analysis relay (Gemini via Portkey)
+- Daily summary storage + email reports (SendGrid)
+- Subscription management (Dodo Payments)
+- Admin API for waitlist, campaigns, user management
+- Slack notifications for signups, feedback, alerts
 
-- `main-monorepo` - Development
-- `prod-monorepo` - Production
+Deploy: `cd backend && bash deploy.sh`
 
-## Links
+### website/ — Marketing + Admin
 
-- **PyPI Package**: https://pypi.org/project/telos-tracker/
-- **Backend**: https://telos-backend-ae7k4avtpq-el.a.run.app
-- **Firebase**: gen-lang-client-0772617718
+Next.js static site on Firebase Hosting. Two parts:
 
-## For Developers
+- **Public pages** — landing page, pricing, privacy policy
+- **Admin panel** (`/admin`) — waitlist management, batch invitations, user overview, campaign history
 
-- **Publishing to PyPI**: See [client/QUICKSTART_PUBLISHING.md](client/QUICKSTART_PUBLISHING.md)
-- **Release Management**: See [docs/releases.md](docs/releases.md)
-- **Full Publishing Guide**: See [client/PUBLISHING.md](client/PUBLISHING.md)
+Deploy: `cd website && npm run build && npx firebase deploy --only hosting`
+
+## Branches
+
+| Branch | Purpose |
+|--------|---------|
+| `main-monorepo` | Development — all new work goes here |
+| `prod-monorepo` | Production — deployed code, merged from main |
+
+## Key Infrastructure
+
+| Service | What |
+|---------|------|
+| **Google Cloud Run** | Backend API (`telos-backend`) |
+| **Firebase** | Auth, Firestore, Hosting |
+| **Google Cloud Secret Manager** | API keys (Gemini, SendGrid, Portkey, Dodo) |
+| **SendGrid** | Transactional emails (daily reports, invitations) |
+| **Dodo Payments** | Subscriptions ($3/mo Pro plan) |
+| **PyPI** | Client distribution (`telos-tracker`) |
+
+## Quick Reference
+
+```bash
+# Install & run the client
+pip install telos-tracker
+telos setup
+telos
+
+# Run client from source
+cd client && pip install -r requirements.txt && python main.py
+
+# Run backend locally
+cd backend && npm install && npm run dev
+
+# Deploy backend
+cd backend && bash deploy.sh
+
+# Deploy website
+cd website && npm run build && npx firebase deploy --only hosting
+
+# Publish to PyPI
+cd client && python -m build && twine upload dist/*
+```
+
+## Environment Variables
+
+### Backend (.env)
+
+```
+FIREBASE_PROJECT_ID, GCP_PROJECT_ID
+GEMINI_SECRET_NAME          # GCP Secret Manager key name
+SENDGRID_API_KEY            # Direct or via Secret Manager
+SENDGRID_FROM_EMAIL         # Verified sender
+DODO_PAYMENTS_API_KEY       # Payment processing
+PORTKEY_API_KEY             # AI observability
+SLACK_ALERTS_WEBHOOK        # Slack notifications
+```
+
+### Website (.env.local)
+
+```
+NEXT_PUBLIC_FIREBASE_*      # Firebase config
+NEXT_PUBLIC_BACKEND_URL     # Cloud Run URL
+```
+
+### Client (config.yaml)
+
+Created by `telos setup`. Stores Gemini API key, backend URL, user preferences. Located at `~/.telos/config.yaml`.
 
 ## License
 

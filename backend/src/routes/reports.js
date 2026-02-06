@@ -9,6 +9,7 @@ import sgMail from '@sendgrid/mail';
 import { getSecret } from '../services/secrets.js';
 import { encrypt, decrypt, encryptFields, decryptFields, encryptJSON, decryptJSON } from '../services/encryption.js';
 import { DateTime } from 'luxon';
+import { sendEmailPreferencesChangedNotification } from '../services/slack.js';
 
 // Fields in daily_summaries that contain sensitive user activity data
 const SUMMARY_ENCRYPT_FIELDS = ['daily_narrative', 'key_learnings_json', 'apps', 'timeline', 'deep_work_sessions', 'userEmail'];
@@ -35,8 +36,9 @@ async function initSendGrid() {
  * POST /v1/reports/send
  * Send HTML email report directly
  * Called by the Python batch sender script
+ * Requires Firebase authentication to prevent abuse
  */
-router.post('/send', async (req, res) => {
+router.post('/send', verifyFirebaseToken, async (req, res) => {
     try {
         const { to, subject, html, text, userName } = req.body;
 
@@ -71,7 +73,7 @@ router.post('/send', async (req, res) => {
         }
         return res.status(500).json({
             error: 'Failed to send email',
-            details: error.message
+            ...(process.env.NODE_ENV === 'development' && { details: error.message })
         });
     }
 });
@@ -216,6 +218,12 @@ router.put('/email-preferences', verifyFirebaseToken, async (req, res) => {
 
         console.log(`[REPORTS] Email preferences updated for ${uid}: time=${sendTime}, tz=${timezone}, hour=${hour}`);
 
+        // Slack notification (non-blocking)
+        const userEmail = usersSnapshot.docs[0].data().email || usersSnapshot.docs[0].id;
+        sendEmailPreferencesChangedNotification(userEmail, preferences.emailReports).catch(err =>
+            console.error('[SLACK] Failed to send email preferences notification:', err)
+        );
+
         return res.json({
             success: true,
             preferences: preferences.emailReports
@@ -263,11 +271,57 @@ router.get('/email-preferences', verifyFirebaseToken, async (req, res) => {
 
 /**
  * POST /v1/reports/trigger-daily-emails
- * Triggered by Cloud Scheduler hourly to send daily reports
- * No auth required - protected by Cloud Scheduler service account
+ * Triggered by Cloud Scheduler hourly to send daily reports.
+ * Protected: requires either a valid OIDC token from Cloud Scheduler
+ * or a valid Firebase admin token.
  */
 router.post('/trigger-daily-emails', async (req, res) => {
     try {
+        // Verify caller identity: Cloud Scheduler sends an OIDC token,
+        // or an admin can call with a Firebase token.
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Authorization required' });
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        // Try to verify as a Google OIDC token (from Cloud Scheduler)
+        let authorized = false;
+        try {
+            const { OAuth2Client } = await import('google-auth-library');
+            const client = new OAuth2Client();
+            const ticket = await client.verifyIdToken({
+                idToken: token,
+                audience: process.env.CLOUD_RUN_SERVICE_URL || undefined,
+            });
+            const payload = ticket.getPayload();
+            if (payload && payload.email_verified) {
+                authorized = true;
+                console.log(`[SCHEDULER] Verified OIDC caller: ${payload.email}`);
+            }
+        } catch (oidcErr) {
+            // Not a valid OIDC token, try Firebase admin token
+            try {
+                const { getAuth } = await import('../config/firebase.js');
+                const auth = getAuth();
+                const decoded = await auth.verifyIdToken(token);
+                // Also verify caller is admin
+                const db = admin.firestore();
+                const userDoc = await db.collection('users').doc(decoded.uid).get();
+                if (userDoc.exists && userDoc.data()?.flags?.isAdmin) {
+                    authorized = true;
+                    console.log(`[SCHEDULER] Verified admin caller: ${decoded.uid}`);
+                }
+            } catch (fbErr) {
+                // Neither OIDC nor Firebase token valid
+            }
+        }
+
+        if (!authorized) {
+            return res.status(403).json({ error: 'Forbidden: invalid or unauthorized token' });
+        }
+
         console.log('[SCHEDULER] Daily email trigger received');
 
         // Import email service
@@ -291,7 +345,7 @@ router.post('/trigger-daily-emails', async (req, res) => {
         console.error('[SCHEDULER] Error in daily email job:', error);
         return res.status(500).json({
             error: 'Failed to send daily reports',
-            details: error.message
+            ...(process.env.NODE_ENV === 'development' && { details: error.message })
         });
     }
 });
@@ -320,9 +374,9 @@ router.get('/email-diagnostics', verifyFirebaseToken, async (req, res) => {
         const userEmail = userData.email || usersSnapshot.docs[0].id;
         const emailPrefs = userData.emailReports || {};
 
-        // Get recent summaries
+        // Get recent summaries (query by userId, not userEmail which is encrypted)
         const summariesSnapshot = await db.collection('daily_summaries')
-            .where('userEmail', '==', userEmail)
+            .where('userId', '==', uid)
             .orderBy('date', 'desc')
             .limit(7)
             .get();
@@ -413,7 +467,10 @@ router.get('/email-diagnostics', verifyFirebaseToken, async (req, res) => {
 
     } catch (error) {
         console.error('[REPORTS] Error in diagnostics:', error);
-        return res.status(500).json({ error: 'Failed to get diagnostics', details: error.message });
+        return res.status(500).json({
+            error: 'Failed to get diagnostics',
+            ...(process.env.NODE_ENV === 'development' && { details: error.message })
+        });
     }
 });
 

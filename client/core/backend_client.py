@@ -417,78 +417,6 @@ class BackendClient:
         except requests.RequestException as e:
             raise BackendError(f"Network error: {e}")
 
-    def verify_access(
-        self,
-        email: str,
-        retry_auth: bool = True
-    ) -> Dict[str, Any]:
-        """Verify access for email and start/resume trial.
-        
-        Args:
-            email: User's email address
-            retry_auth: Retry on token expiry
-            
-        Returns:
-            Dict with 'access' (bool), 'accessStatus' (str), 'trialStartDate', etc.
-            
-        Raises:
-            AuthenticationError: If auth fails
-            BackendError: If request fails or access denied
-        """
-        self._apply_rate_limit()
-        
-        try:
-            token = self.firebase_auth.get_token()
-        except FirebaseAuthError as e:
-            raise AuthenticationError(f"Failed to get Firebase token: {e}")
-            
-        try:
-            headers = {
-                'Authorization': f'Bearer {token}',
-                'Content-Type': 'application/json',
-                'X-Client-Version': self.CLIENT_VERSION,
-            }
-            
-            response = requests.post(
-                f"{self.backend_url}/v1/auth/verify-access",
-                json={'email': email},
-                headers=headers,
-                timeout=self.timeout
-            )
-            
-            if response.status_code == 200:
-                return response.json()
-                
-            elif response.status_code == 401:
-                if retry_auth:
-                    token = self.firebase_auth.get_token(force_refresh=True)
-                    return self.verify_access(email, retry_auth=False)
-                else:
-                    raise AuthenticationError("Authentication failed")
-                    
-            elif response.status_code == 403:
-                # Access Denied (Not on whitelist or Expired)
-                # Parse specific error message
-                data = response.json()
-                error_msg = data.get('message', 'Access Denied')
-                # Return the error payload so we can show specific UI
-                return {
-                    'access': False,
-                    'error': error_msg,
-                    'accessStatus': data.get('accessStatus', 'denied')
-                }
-                
-            elif response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 60))
-                error_msg = response.json().get('error', 'Rate limit exceeded')
-                raise RateLimitError(error_msg, retry_after)
-                
-            else:
-                raise BackendError(f"Server error: {response.status_code}")
-                
-        except requests.RequestException as e:
-            raise BackendError(f"Connection error: {e}")
-
     def record_payment_intent(
         self,
         email: str,
@@ -594,6 +522,189 @@ class BackendClient:
             else:
                 raise BackendError(f"Server error: {response.status_code}")
                 
+        except requests.RequestException as e:
+            raise BackendError(f"Connection error: {e}")
+
+    def get_referral_code(
+        self,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Get or generate the user's referral code and stats.
+
+        Returns:
+            Dict with 'referralCode', 'shareLink', 'stats' (referralCount, proCreditsEarned, etc.)
+
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails
+        """
+        self._apply_rate_limit()
+
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+
+            response = requests.get(
+                f"{self.backend_url}/v1/referral/code",
+                headers=headers,
+                timeout=self.timeout
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            elif response.status_code == 401:
+                if retry_auth:
+                    self.firebase_auth.get_token(force_refresh=True)
+                    return self.get_referral_code(retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed after token refresh")
+
+            elif response.status_code == 404:
+                raise BackendError("User not found. Please activate your trial first.")
+
+            else:
+                raise BackendError(f"Server error: {response.status_code}")
+
+        except requests.Timeout:
+            raise BackendError(f"Request timed out after {self.timeout}s")
+
+        except requests.RequestException as e:
+            raise BackendError(f"Connection error: {e}")
+
+    def get_referral_stats(
+        self,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Get detailed referral statistics.
+
+        Returns:
+            Dict with referralCode, stats, and list of referrals
+
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails
+        """
+        self._apply_rate_limit()
+
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+
+            response = requests.get(
+                f"{self.backend_url}/v1/referral/stats",
+                headers=headers,
+                timeout=self.timeout
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            elif response.status_code == 401:
+                if retry_auth:
+                    self.firebase_auth.get_token(force_refresh=True)
+                    return self.get_referral_stats(retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed after token refresh")
+
+            else:
+                raise BackendError(f"Server error: {response.status_code}")
+
+        except requests.Timeout:
+            raise BackendError(f"Request timed out after {self.timeout}s")
+
+        except requests.RequestException as e:
+            raise BackendError(f"Connection error: {e}")
+
+    def verify_access(
+        self,
+        email: str,
+        referral_code: Optional[str] = None,
+        retry_auth: bool = True
+    ) -> Dict[str, Any]:
+        """Verify access for email and start/resume trial.
+
+        Args:
+            email: User's email address
+            referral_code: Optional referral code from invite link
+            retry_auth: Retry on token expiry
+
+        Returns:
+            Dict with 'access' (bool), 'accessStatus' (str), 'trialStartDate', etc.
+
+        Raises:
+            AuthenticationError: If auth fails
+            BackendError: If request fails or access denied
+        """
+        self._apply_rate_limit()
+
+        try:
+            token = self.firebase_auth.get_token()
+        except FirebaseAuthError as e:
+            raise AuthenticationError(f"Failed to get Firebase token: {e}")
+
+        try:
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'X-Client-Version': self.CLIENT_VERSION,
+            }
+
+            payload = {'email': email}
+            if referral_code:
+                payload['referralCode'] = referral_code
+
+            response = requests.post(
+                f"{self.backend_url}/v1/auth/verify-access",
+                json=payload,
+                headers=headers,
+                timeout=self.timeout
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            elif response.status_code == 401:
+                if retry_auth:
+                    token = self.firebase_auth.get_token(force_refresh=True)
+                    return self.verify_access(email, referral_code, retry_auth=False)
+                else:
+                    raise AuthenticationError("Authentication failed")
+
+            elif response.status_code == 403:
+                # Access Denied (Not on whitelist or Expired)
+                data = response.json()
+                error_msg = data.get('message', 'Access Denied')
+                return {
+                    'access': False,
+                    'error': error_msg,
+                    'accessStatus': data.get('accessStatus', 'denied')
+                }
+
+            elif response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 60))
+                error_msg = response.json().get('error', 'Rate limit exceeded')
+                raise RateLimitError(error_msg, retry_after)
+
+            else:
+                raise BackendError(f"Server error: {response.status_code}")
+
         except requests.RequestException as e:
             raise BackendError(f"Connection error: {e}")
 

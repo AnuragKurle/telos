@@ -118,13 +118,6 @@ class DayHeatmap(Widget):
         lines.append(title_line)
         lines.append(Text())  # Empty line
         
-        # Navigation hint with mode toggle
-        nav_hint = "V Toggle Mode  |  ← → Change Day  |  T Jump to Today  |  SPACE Expand/Collapse"
-        nav_line = Text(" " * ((width - len(nav_hint)) // 2))
-        nav_line.append(nav_hint, style="dim italic")
-        lines.append(nav_line)
-        lines.append(Text())  # Empty line
-        
         if not self.blocks:
             lines.append(Text("No activity data for this day yet.", style="dim"))
             lines.append(Text("Your heatmap fills in as Telos captures your work.", style="dim italic"))

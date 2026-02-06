@@ -6,6 +6,19 @@ import { sendSlackNotification } from '../services/slack.js';
 const router = express.Router();
 
 /**
+ * Sanitize user input for safe embedding in Slack mrkdwn messages.
+ * Escapes Slack formatting characters to prevent injection.
+ */
+function sanitizeForSlack(text) {
+  if (!text || typeof text !== 'string') return text || '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .slice(0, 2000); // Truncate to prevent oversized messages
+}
+
+/**
  * POST /v1/feedback
  * Submit user feedback, save to Firestore, and alert Slack.
  */
@@ -16,6 +29,10 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
 
     if (!feedback_text) {
       return res.status(400).json({ error: 'Feedback text is required' });
+    }
+
+    if (typeof feedback_text !== 'string' || feedback_text.length > 5000) {
+      return res.status(400).json({ error: 'Feedback text must be a string of 5000 characters or less' });
     }
 
     const firestore = getFirestore();
@@ -37,13 +54,16 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
     await feedbackRef.set(feedbackData);
 
     // 2. Send Slack Notification (non-critical)
-    const channelId = process.env.SLACK_FEEDBACK_CHANNEL_ID || 'C0A6VF5PBUH';
-    const screen = context?.screen || 'unknown';
+    const channelId = process.env.SLACK_FEEDBACK_CHANNEL_ID;
+    const screen = sanitizeForSlack(context?.screen || 'unknown');
+    const safeFeedbackType = sanitizeForSlack(feedbackData.feedback_type);
+    const safeFeedbackText = sanitizeForSlack(feedback_text);
+    const safeEmail = sanitizeForSlack(feedbackData.email);
     
     let slackMessage = `📝 *New Feedback Received* (from ${screen} screen)\n`;
-    slackMessage += `> *Type:* ${feedbackData.feedback_type}\n`;
-    slackMessage += `> *User:* ${feedbackData.email} (${uid})\n`;
-    slackMessage += `> *Feedback:* ${feedback_text}`;
+    slackMessage += `> *Type:* ${safeFeedbackType}\n`;
+    slackMessage += `> *User:* ${safeEmail} (${uid})\n`;
+    slackMessage += `> *Feedback:* ${safeFeedbackText}`;
 
     const blocks = [
       {
@@ -58,10 +78,10 @@ router.post('/', verifyFirebaseToken, async (req, res) => {
     // Add context details if available
     if (context && Object.keys(context).length > 0) {
       let contextStr = '';
-      if (context.app) contextStr += `*App:* ${context.app}  `;
-      if (context.task) contextStr += `*Task:* ${context.task}  `;
-      if (context.category) contextStr += `*Category:* ${context.category}  `;
-      if (context.summary_id) contextStr += `*Summary ID:* ${context.summary_id}  `;
+      if (context.app) contextStr += `*App:* ${sanitizeForSlack(context.app)}  `;
+      if (context.task) contextStr += `*Task:* ${sanitizeForSlack(context.task)}  `;
+      if (context.category) contextStr += `*Category:* ${sanitizeForSlack(context.category)}  `;
+      if (context.summary_id) contextStr += `*Summary ID:* ${sanitizeForSlack(context.summary_id)}  `;
       
       if (contextStr) {
         blocks.push({

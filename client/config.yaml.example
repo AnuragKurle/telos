@@ -37,9 +37,9 @@ email:
   send_time: "21:00"
 
 firebase:
-  api_key: "AIzaSyCf-aFrlhUGpPP09cQIYDC052wXyYPnHk8"
-  auth_domain: "gen-lang-client-0772617718.firebaseapp.com"
-  project_id: "gen-lang-client-0772617718"
+  api_key: "YOUR_FIREBASE_API_KEY_HERE"
+  auth_domain: "YOUR_PROJECT_ID.firebaseapp.com"
+  project_id: "YOUR_PROJECT_ID"
 
 backend:
   enabled: false
