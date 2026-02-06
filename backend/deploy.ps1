@@ -44,7 +44,19 @@ Write-Host "Image built successfully"
 
 # Deploy to Cloud Run
 Write-Host "Deploying to Cloud Run..."
-gcloud run deploy $SERVICE_NAME --image $IMAGE_NAME --platform managed --region $REGION --allow-unauthenticated --set-env-vars "FIREBASE_PROJECT_ID=$PROJECT_ID,GCP_PROJECT_ID=$PROJECT_ID,GEMINI_SECRET_NAME=GEMINI_API_KEY,SLACK_FEEDBACK_CHANNEL_ID=C0A6VF5PBUH,MIN_CLIENT_VERSION=0.1.0,RATE_LIMIT_PER_HOUR=100,RATE_LIMIT_PER_DAY=2000,NODE_ENV=production,PORTKEY_API_KEY=AapMbWHuS0fvPfOSF9z4iOBuEYTm,PORTKEY_VIRTUAL_KEY=google-virtual-881dd3" --memory 512Mi --cpu 1 --timeout 60 --concurrency 80 --min-instances 0 --max-instances 10
+gcloud run deploy $SERVICE_NAME `
+  --image $IMAGE_NAME `
+  --platform managed `
+  --region $REGION `
+  --allow-unauthenticated `
+  --set-env-vars "FIREBASE_PROJECT_ID=$PROJECT_ID,GCP_PROJECT_ID=$PROJECT_ID,GEMINI_SECRET_NAME=GEMINI_API_KEY,SLACK_FEEDBACK_CHANNEL_ID=C0A6VF5PBUH,MIN_CLIENT_VERSION=0.1.0,RATE_LIMIT_PER_HOUR=100,RATE_LIMIT_PER_DAY=2000,NODE_ENV=production,DODO_ENV=live_mode" `
+  --set-secrets "DODO_PAYMENTS_API_KEY=DODO_PAYMENTS_API_KEY:latest,DODO_PRODUCT_ID_MONTHLY=DODO_PRODUCT_ID_MONTHLY:latest,DODO_PRODUCT_ID_YEARLY=DODO_PRODUCT_ID_YEARLY:latest,DODO_WEBHOOK_SECRET=DODO_WEBHOOK_SECRET:latest,FRONTEND_URL=FRONTEND_URL:latest,PORTKEY_API_KEY=PORTKEY_API_KEY:latest,PORTKEY_VIRTUAL_KEY=PORTKEY_VIRTUAL_KEY:latest,SLACK_ALERTS_WEBHOOK=SLACK_WEBHOOK:latest" `
+  --memory 512Mi `
+  --cpu 1 `
+  --timeout 60 `
+  --concurrency 80 `
+  --min-instances 0 `
+  --max-instances 10
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Deployment failed"

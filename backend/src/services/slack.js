@@ -53,8 +53,9 @@ export async function sendSlackNotification(channelId, message, blocks = [], web
  * Send a user signup notification to Slack
  * 
  * @param {Object} user - User object with uid, email, createdAt
+ * @param {string} mode - User mode: 'cloud', 'byok', or 'unknown'
  */
-export async function sendSignupNotification(user) {
+export async function sendSignupNotification(user, mode = 'unknown') {
   try {
     const webhookUrl = await getSlackSignupWebhook();
     if (!webhookUrl) {
@@ -62,7 +63,10 @@ export async function sendSignupNotification(user) {
       return { success: false, error: 'No webhook' };
     }
 
-    const message = `🎉 *New User Signup*\n> *Email:* ${user.email}\n> *User ID:* ${user.uid}\n> *Created:* ${new Date(user.createdAt).toLocaleString()}`;
+    const modeEmoji = mode === 'byok' ? '🔑' : mode === 'cloud' ? '☁️' : '❓';
+    const modeLabel = mode === 'byok' ? 'BYOK (Local, Free)' : mode === 'cloud' ? 'Cloud (Trial)' : 'Unknown';
+
+    const message = `🎉 *New User Signup*\n> *Email:* ${user.email}\n> *User ID:* ${user.uid}\n> *Mode:* ${modeEmoji} ${modeLabel}\n> *Created:* ${new Date(user.createdAt).toLocaleString()}`;
 
     const blocks = [
       {
@@ -79,7 +83,7 @@ export async function sendSignupNotification(user) {
       blocks: blocks
     });
 
-    console.log(`[SLACK] Signup notification sent for ${user.email}`);
+    console.log(`[SLACK] Signup notification sent for ${user.email} (mode: ${mode})`);
     return { success: true, method: 'webhook' };
   } catch (error) {
     console.error('Error sending signup notification:', error.response?.data || error.message);
@@ -92,13 +96,17 @@ export async function sendSignupNotification(user) {
  * 
  * @param {string} email - User email
  * @param {Date} trialStartDate - When the trial started
+ * @param {string} mode - User mode: 'cloud', 'byok', or 'unknown'
  */
-export async function sendTrialActivationNotification(email, trialStartDate) {
+export async function sendTrialActivationNotification(email, trialStartDate, mode = 'cloud') {
   try {
     const webhookUrl = await getSlackSignupWebhook(); // Reuse signup webhook for now
     if (!webhookUrl) return { success: false, error: 'No webhook' };
 
-    const message = `🚀 *Trial Activated*\n> *User:* ${email}\n> *Started:* ${new Date(trialStartDate).toLocaleString()}`;
+    const modeEmoji = mode === 'byok' ? '🔑' : '☁️';
+    const modeLabel = mode === 'byok' ? 'BYOK (Local)' : 'Cloud';
+
+    const message = `🚀 *Trial Activated*\n> *User:* ${email}\n> *Mode:* ${modeEmoji} ${modeLabel}\n> *Started:* ${new Date(trialStartDate).toLocaleString()}`;
 
     const blocks = [
       {
@@ -115,10 +123,51 @@ export async function sendTrialActivationNotification(email, trialStartDate) {
       blocks: blocks
     });
 
-    console.log(`[SLACK] Trial activation notification sent for ${email}`);
+    console.log(`[SLACK] Trial activation notification sent for ${email} (mode: ${mode})`);
     return { success: true };
   } catch (error) {
     console.error('Error sending trial notification:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Send Upgrade Notification (user upgraded to Pro)
+ * 
+ * @param {string} email - User email
+ * @param {string} plan - Subscription plan (e.g., 'monthly')
+ */
+export async function sendUpgradeNotification(email, plan = 'monthly') {
+  try {
+    const webhookUrl = await getSlackSignupWebhook(); // Reuse signup webhook
+    if (!webhookUrl) {
+      console.warn('[SLACK] No signup webhook found for upgrade notification.');
+      return { success: false, error: 'No webhook' };
+    }
+
+    const planLabel = plan === 'yearly' ? '$30/year' : '$3/month';
+
+    const message = `\u{1F451} *New Pro Upgrade!*\n> *User:* ${email}\n> *Plan:* ${plan} (${planLabel})\n> *Time:* ${new Date().toLocaleString()}`;
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: message
+        }
+      }
+    ];
+
+    await axios.post(webhookUrl, {
+      text: message,
+      blocks: blocks
+    });
+
+    console.log(`[SLACK] Upgrade notification sent for ${email} (plan: ${plan})`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending upgrade notification:', error.message);
     return { success: false, error: error.message };
   }
 }

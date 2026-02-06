@@ -64,7 +64,7 @@ app.use(createPerformanceMonitoringMiddleware());
 // Middleware
 app.use(cors());
 
-// Stripe webhook needs raw body, so handle it before JSON parser
+// Dodo Payments webhook needs raw body, so handle it before JSON parser
 app.use('/v1/checkout/webhook', express.raw({ type: 'application/json' }));
 
 // JSON parser forall other routes

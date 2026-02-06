@@ -23,7 +23,8 @@ function getDodoClient() {
         }
         dodoClient = new DodoPayments({
             bearerToken: apiKey,
-            environment: process.env.DODO_ENV || (process.env.NODE_ENV === 'production' ? 'live_mode' : 'test_mode')
+            environment: process.env.DODO_ENV || (process.env.NODE_ENV === 'production' ? 'live_mode' : 'test_mode'),
+            webhookKey: process.env.DODO_WEBHOOK_SECRET
         });
     }
     return dodoClient;
@@ -86,21 +87,19 @@ router.post('/create-session', verifyFirebaseToken, async (req, res) => {
                 email: email,
                 plan: plan
             },
-            // Redirect URLs
-            success_url: `${process.env.FRONTEND_URL || 'https://telos.app'}/success`,
-            cancel_url: `${process.env.FRONTEND_URL || 'https://telos.app'}/cancel`,
+            // Redirect URL after payment
+            return_url: `${process.env.FRONTEND_URL || 'https://telos.app'}/success`,
         });
 
         console.log(`[CHECKOUT] Created Dodo session: ${JSON.stringify(checkoutSession)}`);
 
-        if (!checkoutSession || !checkoutSession.payment_link) {
-            console.error('[CHECKOUT] Session created but missing payment_link/url');
+        if (!checkoutSession || !checkoutSession.checkout_url) {
+            console.error('[CHECKOUT] Session created but missing checkout_url');
         }
 
         const responseData = {
             sessionId: checkoutSession.session_id,
-            // Check all possible fields: payment_link (v1), url (stripe-like), checkout_url (docs)
-            url: checkoutSession.payment_link || checkoutSession.checkout_url || checkoutSession.url
+            url: checkoutSession.checkout_url
         };
 
         console.log('[CHECKOUT] Sending response:', responseData);
@@ -124,29 +123,26 @@ router.post('/create-session', verifyFirebaseToken, async (req, res) => {
  * Configure this webhook endpoint in Dodo Dashboard: Settings > Webhooks
  */
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-    const webhookSecret = process.env.DODO_WEBHOOK_SECRET;
-
-    // Get the signature from headers
-    const signature = req.headers['x-dodo-signature'] || req.headers['dodo-signature'];
-
-    if (!signature) {
-        console.warn('[WEBHOOK] Missing signature header');
-        return res.status(400).json({ error: 'Missing signature' });
-    }
-
     let event;
 
     try {
-        // Parse the webhook payload
+        // Verify webhook signature using Dodo SDK
+        const dodo = getDodoClient();
         const payload = typeof req.body === 'string' ? req.body : req.body.toString();
-        event = JSON.parse(payload);
 
-        // TODO: Verify webhook signature when Dodo provides verification method
-        // For now, we trust the payload from the configured endpoint
+        event = dodo.webhooks.unwrap(payload, {
+            headers: {
+                'webhook-id': req.headers['webhook-id'],
+                'webhook-signature': req.headers['webhook-signature'],
+                'webhook-timestamp': req.headers['webhook-timestamp'],
+            },
+        });
+
+        console.log('[WEBHOOK] Signature verified successfully');
 
     } catch (err) {
-        console.error(`[WEBHOOK] Error parsing payload: ${err.message}`);
-        return res.status(400).json({ error: 'Invalid payload' });
+        console.error(`[WEBHOOK] Signature verification failed: ${err.message}`);
+        return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
     // Handle the event
@@ -163,7 +159,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                     const data = event.data || event;
                     const metadata = data.metadata || {};
                     const customerEmail = metadata.email || data.customer?.email;
-                    const plan = metadata.plan || 'yearly';
+                    const plan = metadata.plan || 'monthly';
 
                     if (!customerEmail) {
                         console.warn('[WEBHOOK] No customer email found in event');

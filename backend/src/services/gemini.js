@@ -28,6 +28,16 @@ if (PORTKEY_ENABLED) {
 }
 
 /**
+ * Sanitize a string for use in HTTP headers (Portkey metadata).
+ * Removes or replaces characters outside the ASCII byte range (0-255).
+ */
+function sanitizeForHeader(str) {
+  if (!str) return 'unknown';
+  // Replace non-ASCII characters with '?' to keep string readable
+  return str.replace(/[^\x00-\xFF]/g, '?');
+}
+
+/**
  * Get Portkey client (only when Portkey is enabled)
  */
 async function getPortkeyClient(traceId = null, userId = null, contextMetadata = {}) {
@@ -42,8 +52,8 @@ async function getPortkeyClient(traceId = null, userId = null, contextMetadata =
     metadata: {
       call_type: 'screenshot_analysis',
       source: 'telos-backend',
-      window_title: contextMetadata.window_title || 'unknown',
-      app_name: contextMetadata.app_name || 'unknown',
+      window_title: sanitizeForHeader(contextMetadata.window_title),
+      app_name: sanitizeForHeader(contextMetadata.app_name),
       keystrokes: String(contextMetadata.keystrokes || 0),
       mouse_clicks: String(contextMetadata.mouse_clicks || 0),
       window_changes: String(contextMetadata.window_changes || 0),

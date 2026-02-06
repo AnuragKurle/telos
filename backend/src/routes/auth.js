@@ -27,7 +27,7 @@ const router = express.Router();
  */
 router.post('/link-email', verifyFirebaseToken, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, mode } = req.body;
     const uid = req.user.uid;
 
     // Validate input
@@ -68,12 +68,12 @@ router.post('/link-email', verifyFirebaseToken, async (req, res) => {
       // Log the conversion
       console.log(`[AUTH] Anonymous user ${uid} linked to email: ${email}`);
 
-      // Send Slack notification (non-blocking)
+      // Send Slack notification (non-blocking) — includes user mode
       sendSignupNotification({
         uid: updatedUser.uid,
         email: updatedUser.email,
         createdAt: updatedUser.metadata.creationTime
-      }).catch(err => console.error('[SLACK] Failed to send signup notification:', err));
+      }, mode || 'unknown').catch(err => console.error('[SLACK] Failed to send signup notification:', err));
 
       // Return updated user info
       return res.json({
@@ -163,8 +163,9 @@ router.get('/status', verifyFirebaseToken, async (req, res) => {
  */
 router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, mode } = req.body;
     const uid = req.user.uid;
+    const userMode = mode || 'unknown';
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
@@ -218,11 +219,12 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
       }
 
     } else {
-      // New User - Create Record
+      // New User - Create Record (includes mode for analytics)
       await userRef.set({
         email: safeEmail,
         uid: uid,
         accessStatus: 'trial',
+        mode: userMode,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
         trial: {
@@ -247,8 +249,8 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
         });
       }
 
-      // Send Slack Notification
-      sendTrialActivationNotification(safeEmail, trialStartDate);
+      // Send Slack Notification with mode
+      sendTrialActivationNotification(safeEmail, trialStartDate, userMode);
     }
 
     return res.json({
