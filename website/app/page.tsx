@@ -1,6 +1,7 @@
 import { Hero } from "@/components/Hero";
 import { Features } from "@/components/Features";
 import { HowItWorks } from "@/components/HowItWorks";
+import { Pricing } from "@/components/Pricing";
 import { WaitlistCTA } from "@/components/WaitlistCTA";
 import { Terminal } from "lucide-react";
 
@@ -36,6 +37,7 @@ export default function Home() {
         <Hero />
         <Features />
         <HowItWorks />
+        <Pricing />
         <div id="waitlist">
           <WaitlistCTA />
         </div>

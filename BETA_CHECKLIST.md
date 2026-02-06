@@ -7,14 +7,14 @@
 ## Quick Checklist
 
 ### 1. Dodo Payments Setup (15 min)
-- [ ] Create account at https://app.dodopayments.com/signup
-- [ ] Get API key from Settings > API
-- [ ] Create "Telos Pro" product ($3/month subscription)
-- [ ] Configure webhook endpoint
-- [ ] Save these 3 values:
-  - [ ] `DODO_PAYMENTS_API_KEY`
-  - [ ] `DODO_PRODUCT_ID_MONTHLY`
-  - [ ] `DODO_WEBHOOK_SECRET`
+- [x] Create account at https://app.dodopayments.com/signup
+- [x] Get API key from Settings > API
+- [x] Create "Telos Pro" product ($3/month subscription)
+- [x] Configure webhook endpoint
+- [x] Save these 3 values:
+  - [x] `DODO_PAYMENTS_API_KEY`
+  - [x] `DODO_PRODUCT_ID_MONTHLY`
+  - [x] `DODO_WEBHOOK_SECRET`
 
 ### 2. Google Cloud Secrets (10 min)
 - [ ] Get service account email

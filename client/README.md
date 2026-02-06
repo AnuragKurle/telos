@@ -54,7 +54,7 @@ Get your Gemini API key from: https://aistudio.google.com/app/apikey
 
 ## Features
 
-- 📸 **Automatic Screenshot Capture** - Every 30 seconds (configurable)
+- 📸 **Automatic Screen Monitoring** - Captures your activity in the background
 - 🤖 **AI-Powered Analysis** - Gemini Vision understands what you're working on
 - 📊 **Smart Session Building** - Groups activities into meaningful sessions
 - 💬 **AI Chat Interface** - Ask questions about your work patterns

@@ -9,9 +9,9 @@ Telos is built with privacy as a core principle, not an afterthought. We believe
 ## What Data We Collect
 
 ### Screenshots (Temporary)
-- **Captured**: Every 30 seconds when you're active
+- **Captured**: Periodically when you're active
 - **Analyzed**: By AI to understand your activity
-- **Deleted**: Within 5 seconds of capture
+- **Deleted**: Immediately after analysis
 - **Never stored**: Screenshots are never saved to disk or sent to any server
 
 ### Analysis Metadata (Local)
