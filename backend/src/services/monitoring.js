@@ -167,37 +167,6 @@ export async function monitorErrorRate(errorCount, totalRequests, timeWindow = '
 }
 
 /**
- * Monitor API response time and alert if slow
- *
- * @param {string} endpoint - API endpoint
- * @param {number} responseTimeMs - Response time in milliseconds
- */
-export async function monitorResponseTime(endpoint, responseTimeMs) {
-  const threshold = 2000; // 2 seconds
-
-  if (responseTimeMs > threshold) {
-    await sendSlackAlert({
-      severity: AlertSeverity.WARNING,
-      category: AlertCategory.PERFORMANCE,
-      title: `Slow API Response`,
-      message: `Endpoint ${endpoint} took ${responseTimeMs}ms to respond (threshold: ${threshold}ms)`,
-      fields: [
-        {
-          title: 'Endpoint',
-          value: endpoint,
-          short: true,
-        },
-        {
-          title: 'Response Time',
-          value: `${responseTimeMs}ms`,
-          short: true,
-        },
-      ],
-    });
-  }
-}
-
-/**
  * Monitor critical business events
  *
  * @param {string} event - Event name
@@ -364,12 +333,6 @@ export function createPerformanceMonitoringMiddleware() {
       const duration = Date.now() - start;
       const endpoint = `${req.method} ${req.path}`;
 
-      // Log slow requests
-      if (duration > 2000) {
-        console.warn(`[MONITORING] Slow request: ${endpoint} took ${duration}ms`);
-        monitorResponseTime(endpoint, duration).catch(console.error);
-      }
-
       // Monitor error rates
       if (res.statusCode >= 500) {
         console.error(`[MONITORING] Server error: ${endpoint} returned ${res.statusCode}`);
@@ -415,7 +378,6 @@ export function clearAlertCache() {
 export default {
   sendSlackAlert,
   monitorErrorRate,
-  monitorResponseTime,
   monitorBusinessEvent,
   monitorHealthCheckFailure,
   monitorSecurityEvent,
