@@ -96,7 +96,7 @@ class HelpScreen(Screen):
                 # Features
                 with Container(classes="help-section"):
                     yield Static("✨ Features", classes="section-title")
-                    yield Static("📸 Automatic screenshot capture every 30 seconds", classes="help-item")
+                    yield Static("📸 Automatic screen monitoring in the background", classes="help-item")
                     yield Static("🤖 AI-powered analysis with Gemini Vision", classes="help-item")
                     yield Static("📊 Smart session building and grouping", classes="help-item")
                     yield Static("💬 Natural language chat with your work history", classes="help-item")
@@ -127,13 +127,39 @@ class HelpScreen(Screen):
                     yield Static("  → Use Gmail App Password (not regular password)", classes="help-item")
                     yield Static("  → Check spam/junk folder", classes="help-item")
                 
+                # MCP / AI Tools Integration
+                with Container(classes="help-section"):
+                    yield Static("🔌 AI Tools Integration (MCP)", classes="section-title")
+                    yield Static("Telos includes an MCP server so AI assistants", classes="help-item")
+                    yield Static("can query your work history directly.", classes="help-item")
+                    yield Static("", classes="help-item")
+                    yield Static("Setup:", classes="help-item")
+                    yield Static('  1. Add to your Claude/Cursor MCP config:', classes="help-item")
+                    yield Static('     "telos": { "command": "python",', classes="help-item")
+                    yield Static('       "args": ["<path>/client/mcp_server.py"] }', classes="help-item")
+                    yield Static("  2. Restart your AI tool — Telos tools appear", classes="help-item")
+                    yield Static("", classes="help-item")
+                    yield Static("Available tools (7):", classes="help-item")
+                    yield Static("  get_activity_today    — today's time breakdown", classes="help-item")
+                    yield Static("  get_sessions          — work sessions for a date", classes="help-item")
+                    yield Static("  get_daily_summary     — AI-generated daily report", classes="help-item")
+                    yield Static("  query_activity        — natural language queries", classes="help-item")
+                    yield Static("  get_recent_captures   — latest screen analyses", classes="help-item")
+                    yield Static("  get_productivity_trends — multi-day trends", classes="help-item")
+                    yield Static("  get_top_apps          — most-used applications", classes="help-item")
+                    yield Static("", classes="help-item")
+                    yield Static("Example prompts:", classes="help-item")
+                    yield Static('  • "What was I working on this morning?"', classes="help-item")
+                    yield Static('  • "How much time did I spend coding today?"', classes="help-item")
+                    yield Static('  • "Summarize my work this week"', classes="help-item")
+                    yield Static("", classes="help-item")
+                    yield Static("Full config in Settings → AI Integrations", classes="help-item")
+                
                 # Support
                 with Container(classes="help-section"):
                     yield Static("💬 Support", classes="section-title")
-                    yield Static("Documentation: client/README.md", classes="help-item")
-                    yield Static("GitHub: github.com/your-repo/telos", classes="help-item")
-                    yield Static("Discord: discord.gg/telos", classes="help-item")
-                    yield Static("Email: support@telos.app", classes="help-item")
+                    yield Static("Email: anuragkurle27@gmail.com", classes="help-item")
+                    yield Static("Press F from any screen to send feedback", classes="help-item")
             
             with Container(id="button-container"):
                 yield Button("Close", variant="primary", id="close-btn")

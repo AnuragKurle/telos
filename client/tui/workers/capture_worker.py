@@ -82,7 +82,8 @@ async def capture_worker_task(app):
     # Initialize Phase 1 components
     db = Database(db_path)
     user_email = config.get('account', 'email', default=None)
-    analyzer = GeminiAnalyzer(api_key, model, user_email=user_email)
+    user_mode = config.get('account', 'mode', default='cloud' if config.get('backend', 'enabled', default=False) else 'byok')
+    analyzer = GeminiAnalyzer(api_key, model, user_email=user_email, user_mode=user_mode)
     capturer = ScreenshotCapture(quality)
     hasher = ScreenshotHasher()
     activity_monitor = ActivityMonitor(idle_timeout)

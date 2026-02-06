@@ -16,10 +16,17 @@ class TrialStatus:
     EXPIRED = "expired" # Trial over, not paid
     PRO = "pro" # Paid user
     NOT_STARTED = "not_started"
+    LOCAL_FREE = "local_free"  # BYOK mode — free forever
 
 
 class TrialManager:
-    """Manages trial period and upgrade prompts."""
+    """Manages trial period and upgrade prompts.
+    
+    Two-tier model:
+    - BYOK (local mode): Free forever. User provides their own Gemini API key.
+      No trial, no expiration, no upgrade prompts.
+    - Cloud mode: 7-day free trial, then $3/month for Pro.
+    """
     
     def __init__(self, config_manager, trial_duration_days: int = 7):
         """Initialize trial manager.
@@ -37,6 +44,17 @@ class TrialManager:
             1: "last_day",
             0: "expired"
         }
+    
+    def is_byok_mode(self) -> bool:
+        """Check if user is in BYOK (Bring Your Own Key) / local mode.
+        
+        BYOK users have backend.enabled = False and provide their own API key.
+        They get free, unlimited access — no trial, no expiration.
+        
+        Returns:
+            True if running in local/BYOK mode
+        """
+        return not self.config.get('backend', 'enabled', default=False)
     
     def activate_trial(self, email: str, start_date_iso: str, end_date_iso: str) -> None:
         """Activate trial period from server response.
@@ -139,8 +157,12 @@ class TrialManager:
         """Get current trial status.
         
         Returns:
-            One of: TrialStatus.ACTIVE, EXPIRED, PRO, NOT_STARTED
+            One of: TrialStatus.ACTIVE, EXPIRED, PRO, NOT_STARTED, LOCAL_FREE
         """
+        # BYOK users are always free — no trial system applies
+        if self.is_byok_mode():
+            return TrialStatus.LOCAL_FREE
+        
         # Check explicit status first (synced from server)
         account_config = self.config.config.get('account', {})
         explicit_status = account_config.get('status')
@@ -172,10 +194,13 @@ class TrialManager:
     def is_trial_active(self) -> bool:
         """Check if trial is currently active.
         
+        BYOK users are always considered active (free forever).
+        
         Returns:
-            True if trial is active
+            True if trial is active or user is in BYOK mode
         """
-        return self.get_trial_status() == TrialStatus.ACTIVE
+        status = self.get_trial_status()
+        return status in (TrialStatus.ACTIVE, TrialStatus.LOCAL_FREE)
     
     def is_pro(self) -> bool:
         """Check if user has Pro access.
@@ -188,20 +213,24 @@ class TrialManager:
     def is_trial_expired(self) -> bool:
         """Check if trial has expired.
         
+        BYOK users never expire.
+        
         Returns:
-            True if trial is expired
+            True if trial is expired (never true for BYOK)
         """
         return self.get_trial_status() == TrialStatus.EXPIRED
     
     def should_show_upgrade_prompt(self) -> Optional[str]:
         """Check if an upgrade prompt should be shown.
         
+        BYOK users never see upgrade prompts.
+        
         Returns:
             Prompt type ("halfway", "last_day", "expired") or None
         """
         status = self.get_trial_status()
         
-        if status == TrialStatus.PRO:
+        if status in (TrialStatus.PRO, TrialStatus.LOCAL_FREE):
             return None
             
         if status == TrialStatus.EXPIRED:
@@ -295,6 +324,9 @@ class TrialManager:
         """
         status = self.get_trial_status()
         
+        if status == TrialStatus.LOCAL_FREE:
+            return "green"
+        
         if status == TrialStatus.PRO:
             return "blue"
         
@@ -317,6 +349,9 @@ class TrialManager:
             Banner message string
         """
         status = self.get_trial_status()
+        
+        if status == TrialStatus.LOCAL_FREE:
+            return ""  # No banner needed for BYOK users
         
         if status == TrialStatus.PRO:
             return "Pro Account Active"
@@ -368,8 +403,8 @@ class TrialManager:
         """
         status = self.get_trial_status()
         
-        # No nudges for Pro or expired users
-        if status != TrialStatus.ACTIVE:
+        # No nudges for Pro, BYOK, or expired users
+        if status not in (TrialStatus.ACTIVE,):
             return None
         
         days_remaining = self.get_days_remaining()

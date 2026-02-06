@@ -1,7 +1,6 @@
 """Dashboard screen - main view."""
 
 from datetime import datetime
-from typing import Optional
 from textual.screen import Screen
 from textual.reactive import reactive
 from textual.app import ComposeResult
@@ -12,12 +11,12 @@ from textual.binding import Binding
 from tui.widgets import StatusBanner, CurrentActivity, CategoryBreakdown, RecentTimeline
 from tui.widgets.day_heatmap import DayHeatmap
 from tui.widgets.activity_waveform import ActivityWaveform
-from tui.screens.feedback_modal import FeedbackModal
 from tui.screens.upgrade_modal import UpgradeModal
+from tui.feedback_mixin import FeedbackMixin
 from core.trial_manager import TrialManager
 
 
-class DashboardScreen(Screen):
+class DashboardScreen(FeedbackMixin, Screen):
     """Main dashboard screen showing live activity tracking."""
 
     # View mode: "60min" (waveform) or "day" (full day heatmap)
@@ -83,6 +82,14 @@ class DashboardScreen(Screen):
         text-style: bold;
         color: $text;
         height: 2;
+    }
+
+    #graph-tabs {
+        height: 1;
+        text-align: right;
+        color: $text-muted;
+        padding: 0 1;
+        margin-bottom: 0;
     }
 
     #middle-section {
@@ -179,6 +186,7 @@ class DashboardScreen(Screen):
             yield Static(self.get_greeting(), id="greeting")
             yield CurrentActivity(id="current-activity")
             
+            yield Static(self._get_graph_tabs_text(), id="graph-tabs")
             with Horizontal(id="middle-section"):
                 yield CategoryBreakdown(id="category-breakdown")
                 yield ActivityWaveform(id="waveform-graph")
@@ -202,6 +210,7 @@ class DashboardScreen(Screen):
     def watch_graph_mode(self, old_mode: str, new_mode: str) -> None:
         """Update visibility when graph mode changes."""
         self._update_graph_visibility()
+        self._update_graph_tabs()
 
     def _update_graph_visibility(self) -> None:
         """Show/hide graphs based on current mode."""
@@ -218,110 +227,33 @@ class DashboardScreen(Screen):
         except:
             pass  # Widgets not yet mounted
 
+    def _get_graph_tabs_text(self) -> str:
+        """Get the graph tab indicator text."""
+        if self.graph_mode == "day":
+            return "[bold]Day View[/bold] │ [dim]60min View[/dim]  (V: switch)"
+        else:
+            return "[dim]Day View[/dim] │ [bold]60min View[/bold]  (V: switch)"
+
+    def _update_graph_tabs(self) -> None:
+        """Update the graph tab labels."""
+        try:
+            self.query_one("#graph-tabs", Static).update(self._get_graph_tabs_text())
+        except Exception:
+            pass
+
     def action_toggle_graph_mode(self) -> None:
         """Toggle between 60-minute waveform and full day heatmap."""
         self.graph_mode = "day" if self.graph_mode == "60min" else "60min"
 
-    def action_show_feedback(self) -> None:
-        """Show feedback modal for current activity."""
-        try:
-            # Get current activity from app state
-            context = {
-                'type': 'capture',
-                'screen': 'dashboard',
-                'app': getattr(self.app, 'current_app', None) or 'Unknown',
-                'task': getattr(self.app, 'current_task', None) or 'No activity',
-                'category': getattr(self.app, 'current_category', None) or 'idle',
-            }
-
-            def handle_feedback(result: Optional[str]) -> None:
-                """Handle feedback submission."""
-                if not result or not result.strip():
-                    return
-                
-                # Check if backend is enabled
-                config = self.app.config
-                backend_enabled = config.get('backend', 'enabled', default=False)
-                
-                if not backend_enabled:
-                    self.app.notify(
-                        "Feedback collected but backend not configured. Configure in settings.",
-                        severity="warning",
-                        timeout=5
-                    )
-                    return
-                
-                # Submit feedback asynchronously
-                try:
-                    self.run_worker(self._submit_feedback_async(result.strip(), context))
-                except Exception as e:
-                    self.app.notify(
-                        f"Error submitting feedback: {str(e)}",
-                        severity="error",
-                        timeout=5
-                    )
-
-            # Push modal - this should show immediately
-            self.app.push_screen(FeedbackModal(context), handle_feedback)
-        except Exception as e:
-            # Show error notification
-            import traceback
-            self.app.notify(
-                f"Error opening feedback modal: {str(e)}",
-                severity="error",
-                timeout=5
-            )
-            print(f"Feedback modal error: {traceback.format_exc()}")
-
-    async def _submit_feedback_async(self, feedback_text: str, context: dict) -> None:
-        """Submit feedback to backend asynchronously."""
-        try:
-            import asyncio
-            from core.backend_client import BackendClient
-            
-            config = self.app.config
-            backend_url = config.get('backend', 'url')
-            firebase_api_key = config.get('firebase', 'api_key')
-            
-            backend_client = BackendClient(
-                backend_url=backend_url,
-                firebase_api_key=firebase_api_key
-            )
-            
-            metadata = {
-                'screen': 'dashboard',
-                'app_version': '0.1.0',
-            }
-            
-            result = await asyncio.to_thread(
-                backend_client.submit_feedback,
-                feedback_type='capture',
-                feedback_text=feedback_text,
-                context=context,
-                metadata=metadata
-            )
-            
-            # Show success notification with Slack status
-            if result.get('slack_notified', True):  # Default True for backward compat
-                self.app.notify(
-                    "✓ Feedback submitted successfully!",
-                    severity="success",
-                    timeout=3
-                )
-            else:
-                self.app.notify(
-                    "⚠️ Feedback saved but Slack notification failed. Dev will check Firestore.",
-                    severity="warning",
-                    timeout=5
-                )
-            
-        except Exception as e:
-            # Show error notification
-            self.app.notify(
-                f"✗ Failed to submit feedback: {str(e)}",
-                severity="error",
-                timeout=5
-            )
+    def get_feedback_context(self) -> dict:
+        """Provide dashboard-specific feedback context."""
+        return {
+            'type': 'capture',
+            'screen': 'dashboard',
+            'app': getattr(self.app, 'current_app', None) or 'Unknown',
+            'task': getattr(self.app, 'current_task', None) or 'No activity',
+            'category': getattr(self.app, 'current_category', None) or 'idle',
+        }
 
     def action_toggle_expanded(self) -> None:
         """Toggle expanded view (only works in day mode)."""
@@ -360,23 +292,15 @@ class DashboardScreen(Screen):
                 pass
 
     def _show_contextual_nudge(self) -> None:
-        """Show a subtle contextual nudge if conditions are met."""
-        try:
-            trial_manager = TrialManager(self.app.config)
-            
-            # Check for session milestone nudge
-            session_count = getattr(self.app, 'sessions_today', 0)
-            nudge = trial_manager.get_contextual_nudge("milestone", session_count=session_count)
-            if nudge:
-                self.app.notify(nudge, severity="information", timeout=8)
-                return
-            
-            # Check for day-based dashboard nudge
-            nudge = trial_manager.get_contextual_nudge("dashboard")
-            if nudge:
-                self.app.notify(nudge, severity="information", timeout=8)
-        except Exception:
-            pass
+        """Show a subtle contextual nudge if conditions are met.
+        
+        Reduced to only show feature-lock nudges, not upgrade nudges.
+        Upgrade prompts are handled by: trial banner, expiry screen, feature-lock only.
+        """
+        # Contextual upgrade nudges removed to reduce pushiness.
+        # Users see upgrade prompts when: trial banner is shown,
+        # on expiry screen at launch, and when accessing locked features.
+        pass
 
     def _update_upgrade_binding(self) -> None:
         """Refresh the footer to reflect binding changes based on Pro status."""
@@ -390,8 +314,8 @@ class DashboardScreen(Screen):
         """Conditionally disable/hide actions based on subscription status."""
         if action == "show_upgrade":
             trial_manager = TrialManager(self.app.config)
-            if trial_manager.is_pro():
-                return None  # Hide from footer when Pro
+            if trial_manager.is_pro() or trial_manager.is_byok_mode():
+                return None  # Hide from footer when Pro or BYOK
         return True
 
     def action_show_upgrade(self) -> None:
@@ -421,21 +345,81 @@ class DashboardScreen(Screen):
         except:
             pass  # Widget might not be mounted yet
     
+    # Rotating greetings per time slot — keeps it feeling fresh
+    GREETINGS = {
+        'night': [
+            "Hello, Night Owl 🦉",
+            "Burning the midnight oil 🕯️",
+            "The quiet hours 🌌",
+            "Late night hustle 🌃",
+            "Up late and building 🛠️",
+        ],
+        'morning': [
+            "Good morning ☀️",
+            "Rise and shine ✨",
+            "Fresh start today 🌅",
+            "Ready to be productive? 💪",
+            "New day, new focus 🎯",
+        ],
+        'afternoon': [
+            "Good afternoon 👋",
+            "Afternoon momentum 🚀",
+            "Keep the flow going ⚡",
+            "Halfway through the day 🌤️",
+            "Crushing it this afternoon 💥",
+        ],
+        'evening': [
+            "Good evening 🧑‍💻",
+            "Evening session 🌆",
+            "Wrapping up strong 🏁",
+            "Final push of the day 🎯",
+            "Winding down 🌙",
+        ],
+        'late': [
+            "Working late 🌙",
+            "Night shift mode 🌃",
+            "Quiet productivity 🤫",
+            "Dedicated hours 💫",
+            "Finishing strong tonight 🌟",
+        ],
+    }
+
     def get_greeting(self) -> str:
-        """Get time-based creative greeting."""
+        """Get time-based rotating greeting with daily progress."""
+        from tui.theme import format_duration
+
         hour = datetime.now().hour
         config = self.app.config
         name = config.get('account', 'name', default='User')
         
+        # Select time slot
         if 0 <= hour < 5:
-            period = "Hello, Night Owl 🦉"
+            slot = 'night'
         elif 5 <= hour < 12:
-            period = "Good morning ☀️"
+            slot = 'morning'
         elif 12 <= hour < 17:
-            period = "Good afternoon 👋"
+            slot = 'afternoon'
         elif 17 <= hour < 21:
-            period = "Good evening 🧑‍💻"
-        else:  # 21:00 (9 PM) onwards
-            period = "Working late 🌙"
-            
-        return f"{period}, {name}"
+            slot = 'evening'
+        else:
+            slot = 'late'
+
+        # Rotate based on day of year for variety without randomness
+        day_of_year = datetime.now().timetuple().tm_yday
+        greetings = self.GREETINGS[slot]
+        period = greetings[day_of_year % len(greetings)]
+
+        # Daily progress indicator
+        total_active = (
+            self.app.work_seconds
+            + self.app.learning_seconds
+            + self.app.browsing_seconds
+            + self.app.entertainment_seconds
+        )
+        active_str = format_duration(total_active)
+
+        progress = ""
+        if total_active > 0:
+            progress = f"  ·  {active_str} active today"
+
+        return f"{period}, {name}{progress}"

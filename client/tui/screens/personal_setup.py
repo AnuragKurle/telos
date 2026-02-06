@@ -8,10 +8,23 @@ from textual.reactive import reactive
 
 
 class PersonalSetupScreen(Screen):
-    """Personal setup screen - collects name, email, password."""
+    """Personal setup screen - collects name, email, password.
+
+    When used for auth retry, pass prefill_email and error_message
+    to skip straight to phase 2 with the error shown.
+    """
     
     phase: reactive[int] = reactive(1)  # Phase 1: name, Phase 2: email/password
     user_name: str = ""
+
+    def __init__(
+        self,
+        prefill_email: str = "",
+        error_message: str = "",
+    ):
+        super().__init__()
+        self._prefill_email = prefill_email
+        self._error_message = error_message
     
     CSS = """
     PersonalSetupScreen {
@@ -102,14 +115,36 @@ class PersonalSetupScreen(Screen):
                     yield Button("Continue", variant="success", id="continue-btn", classes="phase-1")
                     yield Button("Create Account", variant="success", id="create-btn", classes="phase-2")
     
+    def on_mount(self) -> None:
+        """Handle prefill for auth retry."""
+        if self._prefill_email:
+            # Skip to phase 2 directly for retry
+            self.user_name = self._prefill_email.split("@")[0].title()
+            self.phase = 2
+            # Pre-fill email
+            self.query_one("#email-input", Input).value = self._prefill_email
+            # Show error
+            if self._error_message:
+                self.query_one("#status-message", Static).update(
+                    f"[bold red]⚠️ {self._error_message}[/bold red]"
+                )
+            # Focus password field since email is pre-filled
+            self.query_one("#password-input", Input).focus()
+
     def watch_phase(self, new_phase: int) -> None:
         """Handle phase transitions."""
         if new_phase == 2:
             # Update title and subtitle
-            self.query_one("#setup-title", Static).update(f"Nice to meet you, {self.user_name}! 🎉")
-            self.query_one("#setup-subtitle", Static).update(
-                "Let's create your account to save\nyour data securely."
-            )
+            if self._prefill_email:
+                self.query_one("#setup-title", Static).update("Let's try again")
+                self.query_one("#setup-subtitle", Static).update(
+                    "Enter the correct password for your account."
+                )
+            else:
+                self.query_one("#setup-title", Static).update(f"Nice to meet you, {self.user_name}! 🎉")
+                self.query_one("#setup-subtitle", Static).update(
+                    "Let's create your account to save\nyour data securely."
+                )
             
             # Hide phase 1 elements
             for elem in self.query(".phase-1"):
@@ -119,8 +154,9 @@ class PersonalSetupScreen(Screen):
             for elem in self.query(".phase-2"):
                 elem.styles.display = "block"
             
-            # Focus email input
-            self.query_one("#email-input", Input).focus()
+            # Focus email input (unless prefilled)
+            if not self._prefill_email:
+                self.query_one("#email-input", Input).focus()
     
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle input submission."""

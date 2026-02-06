@@ -52,7 +52,11 @@ class RecentTimeline(Container):
         recent = app.recent_captures
 
         if not recent:
-            self.query_one("#timeline-content").update("No recent activity")
+            self.query_one("#timeline-content").update(
+                "[dim]No activity captured yet.\n\n"
+                "Telos watches your screen in the background.\n"
+                "Your timeline will fill up as you work![/dim]"
+            )
             return
 
         # Build timeline lines

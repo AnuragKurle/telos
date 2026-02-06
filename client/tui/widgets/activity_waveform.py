@@ -10,6 +10,9 @@ from typing import List, Dict, Tuple
 import asyncio
 import math
 
+from tui.theme import CATEGORY_COLORS
+
+
 class ActivityWaveform(Widget):
     """Heatmap/Barcode chart showing activity history over the last 60 minutes.
     
@@ -22,15 +25,6 @@ class ActivityWaveform(Widget):
     
     # 60 minutes window
     TIME_WINDOW_MINUTES = 60
-    
-    # Category color palette
-    CATEGORY_COLORS = {
-        'work': '#5eb5e0',        # Soft cyan-blue
-        'learning': '#b388eb',    # Soft purple
-        'browsing': '#7cd992',    # Soft green
-        'entertainment': '#f4a460', # Sandy orange
-        'idle': '#3d3d4d',        # Muted dark
-    }
 
     def on_mount(self):
         """Initialize when widget is mounted."""
@@ -183,7 +177,7 @@ class ActivityWaveform(Widget):
                 
                 total = sum(bucket.values())
                 dom_cat = max(bucket.items(), key=lambda item: item[1])[0]
-                color = self.CATEGORY_COLORS.get(dom_cat, '#3d3d4d')
+                color = CATEGORY_COLORS.get(dom_cat, '#3d3d4d')
                 
                 intensity = total / expected_density
                 if intensity > 0.8: char_idx = 3 

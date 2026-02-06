@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 from core.database import Database
 from typing import List, Dict
 
+from tui.theme import CATEGORY_COLORS, INTENSITY_CHARS
+
+
 class DayHeatmap(Widget):
     """Heatmap showing full day (24 hours) in 30-minute blocks.
     
@@ -21,18 +24,6 @@ class DayHeatmap(Widget):
     expanded = reactive(False)
     selected_date = reactive(datetime.now().date())
     blocks = reactive([])
-    
-    # Category color palette (matching existing)
-    CATEGORY_COLORS = {
-        'work': '#5eb5e0',        # Soft cyan-blue
-        'learning': '#b388eb',    # Soft purple
-        'browsing': '#7cd992',    # Soft green
-        'entertainment': '#f4a460', # Sandy orange
-        'idle': '#3d3d4d',        # Muted dark
-    }
-    
-    # Block characters for intensity
-    INTENSITY_CHARS = ['·', '░', '▒', '▓', '█']
 
     def on_mount(self):
         """Initialize when widget is mounted."""
@@ -135,7 +126,8 @@ class DayHeatmap(Widget):
         lines.append(Text())  # Empty line
         
         if not self.blocks:
-            lines.append(Text("No data available", style="dim"))
+            lines.append(Text("No activity data for this day yet.", style="dim"))
+            lines.append(Text("Your heatmap fills in as Telos captures your work.", style="dim italic"))
             return self._combine_lines(lines)
         
         # Render grid
@@ -278,11 +270,11 @@ class DayHeatmap(Widget):
         activity = block['activity_level']
         
         # Choose character based on activity level
-        char_idx = int(activity * (len(self.INTENSITY_CHARS) - 1))
-        char = self.INTENSITY_CHARS[char_idx]
+        char_idx = int(activity * (len(INTENSITY_CHARS) - 1))
+        char = INTENSITY_CHARS[char_idx]
         
         # Get color for category
-        color = self.CATEGORY_COLORS.get(category, '#3d3d4d')
+        color = CATEGORY_COLORS.get(category, '#3d3d4d')
         
         return char, color
     
@@ -290,7 +282,7 @@ class DayHeatmap(Widget):
         """Render color legend."""
         legend = Text("  Legend: ", style="dim")
         
-        for cat, color in self.CATEGORY_COLORS.items():
+        for cat, color in CATEGORY_COLORS.items():
             if cat != 'idle':  # Skip idle in legend
                 legend.append("█ ", style=color)
                 legend.append(f"{cat.title()}  ", style="dim")

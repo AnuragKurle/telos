@@ -76,7 +76,7 @@ class PrivacyNoticeScreen(Screen):
                     yield Static("", classes="guarantee-item")
                     yield Static("Your data is yours. Always.", classes="guarantee-item")
                     yield Static("", classes="guarantee-item")
-                    yield Static("Read our full Privacy Policy at telos.app/privacy", classes="guarantee-item")
+                    yield Static("Read our full Privacy Policy at gen-lang-client-0772617718.web.app/privacy", classes="guarantee-item")
                 
                 with Container(id="button-container"):
                     yield Button("I Understand", variant="success", id="accept-btn")

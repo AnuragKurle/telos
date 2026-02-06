@@ -16,6 +16,7 @@ from core.daily_aggregator import DailyAggregator
 from core.session_builder import SessionBuilder
 from core.trial_manager import TrialManager
 from tui.screens.feedback_modal import FeedbackModal
+from tui.theme import format_duration
 
 
 class SummaryScreen(Screen):
@@ -240,9 +241,13 @@ class SummaryScreen(Screen):
         else:
             self.current_summary = None
             self.query_one("#summary-content").update(
-                "No data available for today.\n\n"
-                "Start using the app and sessions will be created automatically.\n"
-                "Then come back to view your daily summary!"
+                "[bold]No summary available yet[/bold]\n\n"
+                "Telos needs a few minutes of activity data before it can\n"
+                "generate your daily summary.\n\n"
+                "  1. Keep working normally — Telos tracks in the background\n"
+                "  2. Sessions are created after ~5 minutes of activity\n"
+                "  3. Come back here to see your AI-generated insights\n\n"
+                "[dim]Tip: Press R to regenerate once you have some activity.[/dim]"
             )
 
     def display_summary(self, summary: dict) -> None:
@@ -298,10 +303,21 @@ class SummaryScreen(Screen):
             browsing_sec = today_stats.get('browsing', 0)
             entertainment_sec = today_stats.get('entertainment', 0)
         
-        work_min = work_sec // 60
-        learning_min = learning_sec // 60
-        browsing_min = browsing_sec // 60
-        entertainment_min = entertainment_sec // 60
+        work_str = format_duration(work_sec)
+        learning_str = format_duration(learning_sec)
+        browsing_str = format_duration(browsing_sec)
+        entertainment_str = format_duration(entertainment_sec)
+
+        # Compute weekly averages for comparison
+        weekly_avg = self._get_weekly_averages()
+        work_str = self._with_comparison(work_str, work_sec, weekly_avg.get('work', 0))
+        learning_str = self._with_comparison(learning_str, learning_sec, weekly_avg.get('learning', 0))
+        browsing_str = self._with_comparison(browsing_str, browsing_sec, weekly_avg.get('browsing', 0))
+        entertainment_str = self._with_comparison(entertainment_str, entertainment_sec, weekly_avg.get('entertainment', 0))
+
+        # Total active time
+        total_active = work_sec + learning_sec + browsing_sec + entertainment_sec
+        total_str = format_duration(total_active)
 
         # Format productivity score
         productivity = summary.get('productivity_score', 0.0)
@@ -310,26 +326,30 @@ class SummaryScreen(Screen):
             productivity *= 100
         productivity_bar = self._create_progress_bar(productivity, width=30)
 
+        # Productivity label
+        prod_label, prod_color = self._get_productivity_label(productivity)
+        sessions_count = summary.get('total_sessions', 0)
+
         if is_expired:
             # Truncated view for expired trial users
-            # Show the time breakdown (which they can already see on dashboard)
-            # but hide narrative, learnings, and focus blocks
             narrative_preview = summary.get('daily_narrative', '')
-            # Show first ~100 chars as a teaser
             if len(narrative_preview) > 120:
                 narrative_preview = narrative_preview[:120] + "..."
             
             content = f"""
 [bold reverse] DAILY SUMMARY - {summary['date']} [/]
 
+[bold]At a Glance:[/bold] {total_str} active | {sessions_count} sessions | Score: {productivity:.0f}/100 [{prod_color}]"{prod_label}"[/{prod_color}]
+───────────────────────────────────────────────────────────────────────────
+
 [bold cyan]PRODUCTIVITY SCORE[/]
-{productivity_bar} [bold]{productivity:.1f}/100[/]
+{productivity_bar} [bold]{productivity:.1f}/100[/] [{prod_color}]{prod_label}[/{prod_color}]
 
 [bold cyan]TIME BREAKDOWN[/]
-  💼 [bold white]Work:[/]          {work_min}m
-  📚 [bold white]Learning:[/]      {learning_min}m
-  🌐 [bold white]Browsing:[/]      {browsing_min}m
-  🎮 [bold white]Entertainment:[/] {entertainment_min}m
+  💼 [bold white]Work:[/]          {work_str}
+  📚 [bold white]Learning:[/]      {learning_str}
+  🌐 [bold white]Browsing:[/]      {browsing_str}
+  🎮 [bold white]Entertainment:[/] {entertainment_str}
 
 [bold cyan]ACTIVITY PATTERNS[/]
   Context Switches: [bold white]{summary.get('context_switches', 0)}[/]
@@ -354,14 +374,17 @@ class SummaryScreen(Screen):
             content = f"""
 [bold reverse] DAILY SUMMARY - {summary['date']} [/]
 
+[bold]At a Glance:[/bold] {total_str} active | {sessions_count} sessions | Score: {productivity:.0f}/100 [{prod_color}]"{prod_label}"[/{prod_color}]
+───────────────────────────────────────────────────────────────────────────
+
 [bold cyan]PRODUCTIVITY SCORE[/]
-{productivity_bar} [bold]{productivity:.1f}/100[/]
+{productivity_bar} [bold]{productivity:.1f}/100[/] [{prod_color}]{prod_label}[/{prod_color}]
 
 [bold cyan]TIME BREAKDOWN[/]
-  💼 [bold white]Work:[/]          {work_min}m
-  📚 [bold white]Learning:[/]      {learning_min}m
-  🌐 [bold white]Browsing:[/]      {browsing_min}m
-  🎮 [bold white]Entertainment:[/] {entertainment_min}m
+  💼 [bold white]Work:[/]          {work_str}
+  📚 [bold white]Learning:[/]      {learning_str}
+  🌐 [bold white]Browsing:[/]      {browsing_str}
+  🎮 [bold white]Entertainment:[/] {entertainment_str}
 
 [bold cyan]ACTIVITY PATTERNS[/]
   Context Switches: [bold white]{summary.get('context_switches', 0)}[/]
@@ -382,14 +405,12 @@ class SummaryScreen(Screen):
         self.query_one("#summary-content").update(content)
 
     def _show_summary_nudge(self) -> None:
-        """Show a subtle contextual nudge after summary generation."""
-        try:
-            trial_manager = TrialManager(self.app.config)
-            nudge = trial_manager.get_contextual_nudge("summary")
-            if nudge:
-                self.app.notify(nudge, severity="information", timeout=8)
-        except Exception:
-            pass
+        """Previously showed upgrade nudges; now disabled to reduce pushiness.
+        
+        Upgrade prompts are handled by: trial banner, expiry screen, 
+        and feature-lock messages only.
+        """
+        pass
 
     def action_show_feedback(self) -> None:
         """Show feedback modal for current summary."""
@@ -489,16 +510,99 @@ class SummaryScreen(Screen):
                 f"Please try again or check your backend connection."
             )
 
+    def _get_weekly_averages(self) -> dict:
+        """Get average seconds per category over the past 7 days.
+
+        Returns:
+            Dict with 'work', 'learning', 'browsing', 'entertainment' average seconds.
+        """
+        try:
+            config = self.app.config
+            db = Database(config.get('storage', 'database_path'))
+            today = datetime.now()
+
+            totals = {'work': 0, 'learning': 0, 'browsing': 0, 'entertainment': 0}
+            count = 0
+
+            for days_back in range(1, 8):
+                past_date = today - __import__('datetime').timedelta(days=days_back)
+                past_summary = db.get_daily_summary(past_date)
+                if past_summary:
+                    totals['work'] += past_summary.get('work_seconds', 0)
+                    totals['learning'] += past_summary.get('learning_seconds', 0)
+                    totals['browsing'] += past_summary.get('browsing_seconds', 0)
+                    totals['entertainment'] += past_summary.get('entertainment_seconds', 0)
+                    count += 1
+
+            if count == 0:
+                return {}
+
+            return {k: v // count for k, v in totals.items()}
+        except Exception:
+            return {}
+
+    def _with_comparison(self, time_str: str, current_sec: int, avg_sec: int) -> str:
+        """Add a comparison indicator to a time string.
+
+        Args:
+            time_str: Formatted time string (e.g. "3h 12m")
+            current_sec: Current value in seconds
+            avg_sec: Weekly average in seconds
+
+        Returns:
+            Time string with comparison (e.g. "3h 12m [green](+23%)[/]")
+        """
+        if avg_sec <= 0:
+            return time_str
+
+        diff_pct = ((current_sec - avg_sec) / avg_sec) * 100
+        if abs(diff_pct) < 5:
+            return f"{time_str} [dim](avg)[/dim]"
+        elif diff_pct > 0:
+            return f"{time_str} [green](+{diff_pct:.0f}%)[/green]"
+        else:
+            return f"{time_str} [yellow]({diff_pct:.0f}%)[/yellow]"
+
+    def _get_productivity_label(self, score: float) -> tuple:
+        """Get a qualitative label and color for a productivity score.
+
+        Args:
+            score: Productivity score (0-100)
+
+        Returns:
+            Tuple of (label, color)
+        """
+        if score >= 86:
+            return "On fire!", "bold green"
+        elif score >= 71:
+            return "Great work!", "green"
+        elif score >= 51:
+            return "Solid day", "cyan"
+        elif score >= 31:
+            return "Getting started", "yellow"
+        else:
+            return "Rough day", "red"
+
     def _create_progress_bar(self, value: float, width: int = 30) -> str:
-        """Create a simple ASCII progress bar.
+        """Create a colored ASCII progress bar.
 
         Args:
             value: Value (0-100)
             width: Width of the bar in characters
 
         Returns:
-            ASCII progress bar string
+            ASCII progress bar string with color
         """
         filled = int((value / 100) * width)
         empty = width - filled
-        return f"[{'█' * filled}{'░' * empty}]"
+
+        if value >= 75:
+            color = "green"
+        elif value >= 50:
+            color = "cyan"
+        elif value >= 30:
+            color = "yellow"
+        else:
+            color = "red"
+
+        return f"[{color}]{'█' * filled}[/{color}][dim]{'░' * empty}[/dim]"

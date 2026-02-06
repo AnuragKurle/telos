@@ -1,30 +1,29 @@
-"""Settings screen - configuration."""
+"""Settings screen - configuration with structured layout."""
 
+from pathlib import Path
 from textual.screen import Screen
 from textual.app import ComposeResult
 from textual.widgets import Header, Footer, Static
 from textual.containers import ScrollableContainer
-from typing import Optional
+from textual.binding import Binding
 
 from core.trial_manager import TrialManager
-
 from core.database import Database
 from core.goal_manager import AnalysisGoalManager
-from core.backend_client import BackendClient, BackendError, AuthenticationError
 from tui.screens.goal_editor import GoalEditorModal
 from tui.screens.email_settings_modal import EmailSettingsModal
-from tui.screens.feedback_modal import FeedbackModal
 from tui.screens.upgrade_modal import UpgradeModal
+from tui.feedback_mixin import FeedbackMixin
 
 
-class SettingsScreen(Screen):
-    """Settings view for configuration."""
+class SettingsScreen(FeedbackMixin, Screen):
+    """Settings view with configuration."""
 
     BINDINGS = [
-        ("g", "edit_goals", "Edit Goals"),
-        ("e", "edit_email", "Email Settings"),
-        ("escape", "app.pop_screen", "Back"),
-        ("q", "app.quit", "Quit"),
+        Binding("g", "edit_goals", "Edit Goals"),
+        Binding("e", "edit_email", "Email Settings"),
+        Binding("escape", "app.pop_screen", "Back"),
+        Binding("q", "app.quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -43,39 +42,48 @@ class SettingsScreen(Screen):
     def action_edit_goals(self) -> None:
         """Open goal editor modal."""
         def on_goals_saved():
-            # Refresh settings display after saving
             self.update_settings()
+            self.app.notify("Goals updated!", severity="information", timeout=3)
 
         self.app.push_screen(GoalEditorModal(self.app.config, on_save=on_goals_saved))
 
     def action_edit_email(self) -> None:
         """Open email settings modal."""
         def on_email_saved():
-            # Refresh settings display after saving
             self.update_settings()
+            self.app.notify("Email settings saved!", severity="information", timeout=3)
 
         self.app.push_screen(EmailSettingsModal(self.app.config, on_save=on_email_saved))
 
     def update_settings(self) -> None:
-        """Update settings display."""
-        app = self.app
-        config = app.config
+        """Update the settings display."""
+        config = self.app.config
+        trial_manager = TrialManager(config)
         
-        # Account Info (use correct config.get API)
+        # Account info
         name = config.get('account', 'name', default='User')
         email = config.get('account', 'email', default='Not set')
-        status = config.get('account', 'status', default='trial')
-        
-        # Check Pro status using TrialManager
-        trial_manager = TrialManager(config)
         is_pro = trial_manager.is_pro()
+        is_byok = trial_manager.is_byok_mode()
         
-        # Format plan display
-        if is_pro:
-            plan = "✨ PRO"
+        # Plan status
+        if is_byok:
+            plan_line = "Plan:  [green]Local Mode[/green] (free, unlimited)"
+            mode_line = "  Mode:  Bring Your Own Key"
+        elif is_pro:
+            plan_line = "Plan:  [green]PRO[/green]"
+            mode_line = "  Mode:  Cloud"
         else:
-            plan = status.upper()
-        
+            try:
+                trial_days = trial_manager.get_days_remaining()
+                if trial_days > 0:
+                    plan_line = f"Plan:  [yellow]Trial ({trial_days}d left)[/yellow]"
+                else:
+                    plan_line = "Plan:  [red]Trial Expired[/red]"
+            except:
+                plan_line = "Plan:  [yellow]Trial[/yellow]"
+            mode_line = "  Mode:  Cloud"
+
         # Email Preferences
         send_time = config.get('email', 'send_time', default='21:00')
         email_enabled = "Enabled" if config.get('email', 'enabled', default=False) else "Disabled"
@@ -88,11 +96,55 @@ class SettingsScreen(Screen):
         preset_info = AnalysisGoalManager.PRESET_GOALS.get(preset, {})
         preset_name = preset_info.get('name', preset)
 
-        # Conditional upgrade text
-        if is_pro:
-            upgrade_line = "Thank you for supporting Telos! 💙"
+        # Data & Privacy
+        db_path = config.get('storage', 'database_path')
+        try:
+            db_size = Path(db_path).stat().st_size
+            if db_size > 1_000_000:
+                size_str = f"{db_size / 1_000_000:.1f} MB"
+            else:
+                size_str = f"{db_size / 1_000:.0f} KB"
+        except:
+            size_str = "Unknown"
+
+        # API Key display for BYOK users
+        api_key_line = ""
+        if is_byok:
+            raw_key = config.get('gemini', 'api_key', default='')
+            if raw_key and raw_key not in ('', 'YOUR_GEMINI_API_KEY_HERE', 'BACKEND_MODE_NO_KEY_NEEDED'):
+                masked = raw_key[:6] + "..." + raw_key[-4:] if len(raw_key) > 10 else "****"
+                api_key_line = f"  API Key:        {masked} (stored locally)"
+            else:
+                api_key_line = "  API Key:        [yellow]Not configured[/yellow]"
+
+        # MCP Integration
+        mcp_server_path = Path(__file__).resolve().parents[2] / "mcp_server.py"
+        mcp_exists = mcp_server_path.exists()
+        if mcp_exists:
+            mcp_status = "[green]Available[/green]"
+            mcp_path = str(mcp_server_path).replace("\\", "/")
         else:
-            upgrade_line = "Press U to Upgrade to Pro"
+            mcp_status = "[yellow]Not Found[/yellow]"
+            mcp_path = "Not detected"
+
+        # Upgrade section
+        if is_byok:
+            upgrade_section = """
+───────────────────────────────────────────────────────────────────────────
+💡 Want Cloud Features?
+   Email reports, zero setup, no API key needed.
+   Run [bold]telos setup[/bold] and choose Cloud mode.
+"""
+        elif is_pro:
+            upgrade_section = """
+───────────────────────────────────────────────────────────────────────────
+[green]Thank you for supporting Telos![/green] 💙
+"""
+        else:
+            upgrade_section = """
+───────────────────────────────────────────────────────────────────────────
+[bold]Press U to Upgrade to Pro[/bold] — $3/month, all features unlocked
+"""
 
         settings_text = f"""
 ╔══════════════════════════════════════════════════════════════════════════╗
@@ -102,7 +154,8 @@ class SettingsScreen(Screen):
 👤 ACCOUNT
   Name:  {name}
   Email: {email}
-  Plan:  {plan}
+  {plan_line}
+{mode_line}
 
 📧 EMAIL PREFERENCES
   Daily Report: {email_enabled}
@@ -115,123 +168,51 @@ class SettingsScreen(Screen):
 
   [ Press G to Change Goals ]
 
-───────────────────────────────────────────────────────────────────────────
-{upgrade_line}
-Press ESC to Back
+🔒 DATA & PRIVACY
+  Database Size:  {size_str}
+  Storage:        Local (SQLite)
+  Screenshots:    Deleted after analysis
+{api_key_line}
+
+🔌 AI INTEGRATIONS (MCP)
+  Status: {mcp_status}
+  Server: {mcp_path}
+
+  Add to Claude Desktop or Cursor MCP config:
+  {{
+    "telos": {{
+      "command": "python",
+      "args": ["{mcp_path}"]
+    }}
+  }}
+
+  7 tools: get_activity_today, get_sessions, get_daily_summary,
+           query_activity, get_recent_captures, get_productivity_trends,
+           get_top_apps
+
+  Example: "What did I work on this morning?"
+
+ℹ️  ABOUT
+  Version:  0.2.1-beta
+  Support:  anuragkurle27@gmail.com
+  Feedback: Press F from any screen
+{upgrade_section}
+Press ESC to go Back
 """
         self.query_one("#settings-content").update(settings_text)
-        
-        # Dynamically update bindings based on pro status
-        self._update_bindings_for_status(is_pro)
-    
-    def _update_bindings_for_status(self, is_pro: bool) -> None:
-        """Update key bindings based on subscription status."""
-        # The bindings are static at class level, but we can control action behavior
-        pass  # We'll handle this via check_action
-
-    def action_show_feedback(self) -> None:
-        """Show feedback modal for settings screen."""
-        try:
-            config = self.app.config
-            backend_enabled = config.get('backend', 'enabled', default=False)
-            
-            context = {
-                'type': 'general',
-                'screen': 'settings',
-            }
-            
-            def handle_feedback(result: Optional[str]) -> None:
-                """Handle feedback submission."""
-                if not result or not result.strip():
-                    return
-                
-                if not backend_enabled:
-                    self.app.notify(
-                        "Feedback collected but backend not configured.",
-                        severity="warning",
-                        timeout=5
-                    )
-                    return
-                
-                # Submit feedback asynchronously
-                self.run_worker(self._submit_feedback_async(result.strip(), context))
-
-            self.app.push_screen(FeedbackModal(context), handle_feedback)
-        except Exception as e:
-            self.app.notify(
-                f"Error opening feedback modal: {str(e)}",
-                severity="error",
-                timeout=5
-            )
-
-    async def _submit_feedback_async(self, feedback_text: str, context: dict) -> None:
-        """Submit feedback to backend asynchronously."""
-        try:
-            import asyncio
-            
-            config = self.app.config
-            backend_url = config.get('backend', 'url')
-            firebase_api_key = config.get('firebase', 'api_key')
-            
-            backend_client = BackendClient(
-                backend_url=backend_url,
-                firebase_api_key=firebase_api_key
-            )
-            
-            metadata = {
-                'screen': context.get('screen', 'settings'),
-                'app_version': '0.1.0',
-            }
-            
-            response = await asyncio.to_thread(
-                backend_client.submit_feedback,
-                feedback_type=context.get('type', 'general'),
-                feedback_text=feedback_text,
-                context=context,
-                metadata=metadata
-            )
-            
-            # Show success notification with Slack status
-            if response.get('slack_notified', True):  # Default True for backward compat
-                self.app.notify(
-                    "✓ Feedback submitted successfully!",
-                    severity="information",
-                    timeout=3
-                )
-            else:
-                self.app.notify(
-                    "⚠️ Feedback saved but Slack notification failed. Dev will check Firestore.",
-                    severity="warning",
-                    timeout=5
-                )
-        except (BackendError, AuthenticationError) as e:
-            self.app.notify(
-                f"Failed to submit feedback: {str(e)}",
-                severity="error",
-                timeout=5
-            )
-        except Exception as e:
-            self.app.notify(
-                f"Unexpected error: {str(e)}",
-                severity="error",
-                timeout=5
-            )
 
     def action_show_upgrade(self) -> None:
         """Show upgrade modal."""
-        # Check if already pro
+        from core.backend_client import BackendClient
+
         trial_manager = TrialManager(self.app.config)
         if trial_manager.is_pro():
-            self.app.notify("You're already a Pro user! 🎉", severity="information")
+            self.app.notify("You're already a Pro user!", severity="information")
             return
-        
-        # Get email from config
+
         email = self.app.config.get('account', 'email', default="")
-        
-        # Initialize backend client
         backend_url = self.app.config.get('backend', 'url', default="")
         firebase_api_key = self.app.config.get('firebase', 'api_key', default="")
         backend_client = BackendClient(backend_url, firebase_api_key)
-        
-        self.app.push_screen(UpgradeModal(backend_client, email))
 
+        self.app.push_screen(UpgradeModal(backend_client, email))

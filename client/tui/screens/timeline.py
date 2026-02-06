@@ -13,13 +13,14 @@ from rich.text import Text
 from core.database import Database
 from core.trial_manager import TrialManager
 from tui.screens.feedback_modal import FeedbackModal
+from tui.theme import CATEGORY_COLORS
 
 
 class TimelineScreen(Screen):
     """Timeline view showing all today's sessions or individual captures."""
 
     # View mode: "sessions" or "captures"
-    view_mode: reactive[str] = reactive("captures")
+    view_mode: reactive[str] = reactive("sessions")
 
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
@@ -28,15 +29,6 @@ class TimelineScreen(Screen):
         ("v", "toggle_view", "Sessions/Captures"),
         ("e", "export_data", "Export"),
     ]
-    
-    # Category color palette matching the activity graph
-    CATEGORY_COLORS = {
-        'work': '#5eb5e0',        # Soft cyan-blue
-        'learning': '#b388eb',    # Soft purple
-        'browsing': '#7cd992',    # Soft green
-        'entertainment': '#f4a460', # Sandy orange
-        'idle': '#3d3d4d',        # Muted dark
-    }
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -84,7 +76,7 @@ class TimelineScreen(Screen):
         if self.view_mode == "sessions":
             self.sub_title = "Today's Activity Sessions"
         else:
-            self.sub_title = "Granular Capture History (Every 30s)"
+            self.sub_title = "Detailed Activity History"
 
     def action_toggle_view(self) -> None:
         """Toggle between sessions and captures view."""
@@ -138,7 +130,7 @@ class TimelineScreen(Screen):
                 return
             capture = dict(row)
 
-        color = self.CATEGORY_COLORS.get(capture['category'].lower(), "cyan")
+        color = CATEGORY_COLORS.get(capture['category'].lower(), "cyan")
         
         details = []
         details.append(f"[bold {color}]Individual Capture Details[/bold {color}]")
@@ -178,7 +170,7 @@ class TimelineScreen(Screen):
                 return
                 
             last_cap = captures[-1]
-            color = self.CATEGORY_COLORS.get(last_cap['category'].lower(), "yellow")
+            color = CATEGORY_COLORS.get(last_cap['category'].lower(), "yellow")
             
             details = []
             details.append(f"[bold {color}]Status:[/bold {color}] Ongoing Activity")
@@ -212,7 +204,7 @@ class TimelineScreen(Screen):
 
         # Get category color
         cat_key = session['category'].lower()
-        color = self.CATEGORY_COLORS.get(cat_key, "cyan")
+        color = CATEGORY_COLORS.get(cat_key, "cyan")
 
         # Build detail text
         details = []
@@ -276,10 +268,10 @@ class TimelineScreen(Screen):
         captures = db.get_captures_for_date(datetime.now())
 
         table.clear(columns=True)
-        table.add_columns("Time", "App", "Category", "Task", "Conf")
+        table.add_columns("Time", "App", "Category", "Task")
 
         if not captures:
-            table.add_row("--:--:--", "--", "No captures yet", "Activity starts appearing here as it's tracked", "--")
+            table.add_row("--", "--", "--", "No activity recorded yet. Start working and your timeline will fill up!")
             return
 
         for cap in captures:
@@ -293,21 +285,25 @@ class TimelineScreen(Screen):
             if not simple_cat:
                 simple_cat = db._categorize_activity(raw_cat)
             
-            color = self.CATEGORY_COLORS.get(simple_cat.lower(), "white")
+            color = CATEGORY_COLORS.get(simple_cat.lower(), "white")
             
             category = Text(raw_cat.capitalize(), style=color)
             
             task_str = cap['task']
-            if len(task_str) > 40:
-                task_str = task_str[:37] + "..."
-            task_text = Text(task_str, style=color)
+            confidence = cap.get('confidence', 1.0)
+            if len(task_str) > 50:
+                task_str = task_str[:47] + "..."
+            # Dim uncertain tasks (low confidence) instead of showing a column
+            task_style = f"dim {color}" if confidence < 0.6 else color
+            task_text = Text(task_str, style=task_style)
+            if confidence < 0.6:
+                task_text.append(" ?", style="dim yellow")
             
             # Also color the app name slightly for better row distinction
             app_text = Text(cap['app_name'][:20], style=f"bold {color}")
             time_text = Text(time_str, style="dim")
-            conf_text = Text(f"{cap['confidence']:.2f}", style="dim")
 
-            table.add_row(time_text, app_text, category, task_text, conf_text, key=str(cap['id']))
+            table.add_row(time_text, app_text, category, task_text, key=str(cap['id']))
 
         self._restore_cursor(scroll_to_bottom, current_row, len(captures))
 
@@ -325,7 +321,7 @@ class TimelineScreen(Screen):
         table.add_columns("Time", "Duration", "Category", "Task", "Focus")
 
         if not sessions and not unprocessed:
-            table.add_row("--:--", "--", "No sessions yet", "Start using the app to see sessions", "--")
+            table.add_row("--:--", "--", "--", "No sessions yet. Sessions appear after ~5 min of activity.", "--")
             return
 
         # ... (rest of session loading logic)
@@ -335,7 +331,7 @@ class TimelineScreen(Screen):
             duration = f"{duration_min}m"
             
             raw_cat = session['category']
-            color = self.CATEGORY_COLORS.get(raw_cat.lower(), "white")
+            color = CATEGORY_COLORS.get(raw_cat.lower(), "white")
             category = Text(raw_cat.capitalize(), style=color)
             
             task_str = session['primary_task']
@@ -366,7 +362,7 @@ class TimelineScreen(Screen):
             duration_str = f"{duration_min}m+"
             
             cat_name = last_cap['category']
-            color = self.CATEGORY_COLORS.get(cat_name.lower(), "yellow")
+            color = CATEGORY_COLORS.get(cat_name.lower(), "yellow")
             category = Text(cat_name.capitalize(), style=color)
             
             task_str = last_cap['task']

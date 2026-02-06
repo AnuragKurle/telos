@@ -11,7 +11,8 @@ from tui.workers import capture_worker_task, db_polling_worker
 from tui.workers.session_worker import session_worker_task
 from tui.screens import (
     DashboardScreen, TimelineScreen, SummaryScreen, SettingsScreen, ChatScreen,
-    HelpScreen, UpgradeScreen, WelcomeProScreen
+    HelpScreen, UpgradeScreen, WelcomeProScreen, GettingStartedScreen,
+    SplashScreen
 )
 from tui.widgets import TrialBanner
 from core.trial_manager import TrialManager
@@ -88,6 +89,7 @@ class TelosApp(App):
         ("h", "show_help", "Help"),
         ("q", "quit", "Quit"),
         ("f", "show_feedback", "Feedback"),
+        ("ctrl+p", "command_palette", "Command Palette"),
     ]
 
     def __init__(self, config: ConfigManager):
@@ -115,13 +117,26 @@ class TelosApp(App):
         self.trial_banner = None
 
     def on_mount(self) -> None:
-        """Called when app is mounted - start background workers."""
+        """Called when app is mounted - show splash then start."""
         self.title = "Telos"
         self.sub_title = "Live Activity Dashboard"
 
-        # Push the Dashboard screen
+        # Show splash screen while the app initializes
+        self.push_screen(SplashScreen())
+
+        # After a brief moment, replace splash with dashboard and start workers
+        self.set_timer(2.5, self._finish_startup)
+
+    def _finish_startup(self) -> None:
+        """Transition from splash to dashboard and start workers."""
+        # Pop the splash screen and push dashboard
+        self.pop_screen()
         self.push_screen(DashboardScreen())
-        
+
+        # Show the Getting Started overlay on the very first launch after
+        # onboarding — helps users know what happens next and promotes MCP.
+        self._maybe_show_getting_started()
+
         # Sync account status from backend (non-blocking, best effort)
         backend_enabled = self.config.get('backend', 'enabled', default=False)
         if backend_enabled:
@@ -264,6 +279,33 @@ class TelosApp(App):
                 await self.firestore_sync_worker_task
             except asyncio.CancelledError:
                 pass
+
+    # ------------------------------------------------------------------
+    # Getting Started overlay (shown once after onboarding)
+    # ------------------------------------------------------------------
+
+    def _maybe_show_getting_started(self) -> None:
+        """Show the Getting Started overlay on the first launch after
+        onboarding.  Uses a flag file so it only fires once."""
+        from pathlib import Path
+
+        flag = Path.home() / ".telos" / ".getting_started_shown"
+        onboarding_done = Path.home() / ".telos" / "onboarding_complete"
+
+        if onboarding_done.exists() and not flag.exists():
+            # Create the flag immediately so it won't show again
+            try:
+                flag.touch()
+            except OSError:
+                pass
+
+            def _handle_gs_result(result):
+                if result == "chat":
+                    self.action_show_chat()
+
+            self.set_timer(1.0, lambda: self.push_screen(
+                GettingStartedScreen(), _handle_gs_result
+            ))
 
     def action_show_dashboard(self) -> None:
         """Show the dashboard screen."""

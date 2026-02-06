@@ -17,6 +17,10 @@ from .help import HelpScreen
 from .feedback_modal import FeedbackModal
 from .upgrade_modal import UpgradeModal
 from .welcome_pro import WelcomeProScreen
+from .sample_preview import SamplePreviewScreen
+from .email_setup import EmailSetupScreen
+from .getting_started import GettingStartedScreen
+from .splash import SplashScreen
 
 __all__ = [
     'DashboardScreen', 
@@ -36,4 +40,8 @@ __all__ = [
     'FeedbackModal',
     'UpgradeModal',
     'WelcomeProScreen',
+    'SamplePreviewScreen',
+    'EmailSetupScreen',
+    'GettingStartedScreen',
+    'SplashScreen',
 ]

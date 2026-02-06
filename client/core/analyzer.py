@@ -18,7 +18,7 @@ PORTKEY_API_KEY = os.getenv('PORTKEY_API_KEY', 'AapMbWHuS0fvPfOSF9z4iOBuEYTm')
 PORTKEY_VIRTUAL_KEY = os.getenv('PORTKEY_VIRTUAL_KEY', 'google-virtual-881dd3')
 
 
-def _log_to_portkey(prompt: str, response_text: str, model: str, call_type: str = "unknown", latency_ms: float = 0, user_id: str = None):
+def _log_to_portkey(prompt: str, response_text: str, model: str, call_type: str = "unknown", latency_ms: float = 0, user_id: str = None, user_mode: str = "unknown"):
     """Log LLM call to Portkey for observability.
     
     Uses Portkey's SDK to make a small "ping" call that logs the metadata.
@@ -40,6 +40,7 @@ def _log_to_portkey(prompt: str, response_text: str, model: str, call_type: str 
                         "source": "telos-client",
                         "model": model,
                         "latency_ms": str(latency_ms),
+                        "user_mode": user_mode,
                     },
                     trace_id=f"client-{call_type}-{int(latency_ms)}",
                 )
@@ -85,13 +86,14 @@ class GeminiAnalyzer:
     COMMON_CATEGORIES = ['work', 'learning', 'browsing', 'entertainment', 'idle',
                          'debugging', 'meeting', 'research', 'communication', 'creative', 'planning', 'break']
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", user_email: str = None):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", user_email: str = None, user_mode: str = "unknown"):
         """Initialize Gemini analyzer.
 
         Args:
             api_key: Google Gemini API key
             model: Model name to use
             user_email: User email for logging
+            user_mode: User mode ('cloud' or 'byok') for Portkey analytics
         """
         from google import genai
         from google.genai import types
@@ -99,6 +101,7 @@ class GeminiAnalyzer:
         self.client = genai.Client(api_key=api_key)
         self.model_name = model
         self.user_email = user_email
+        self.user_mode = user_mode
         self.types = types
         self.max_retries = 3
         self.retry_delay = 2
@@ -107,7 +110,7 @@ class GeminiAnalyzer:
         self.prompt_loader = PromptLoader()
         
         # Log initialization
-        print(f"[GeminiAnalyzer] Initialized with Portkey logging enabled (User: {user_email})")
+        print(f"[GeminiAnalyzer] Initialized with Portkey logging (User: {user_email}, Mode: {user_mode})")
 
     def _apply_rate_limit(self) -> None:
         """Apply rate limiting before making API requests."""
@@ -369,7 +372,8 @@ class GeminiAnalyzer:
                     model=self.model_name,
                     call_type="screenshot_analysis",
                     latency_ms=latency_ms,
-                    user_id=self.user_email
+                    user_id=self.user_email,
+                    user_mode=self.user_mode,
                 )
 
                 # Extract JSON from response

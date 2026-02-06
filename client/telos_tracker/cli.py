@@ -557,22 +557,37 @@ def interactive_setup():
     
     # Ask how the user wants to run Telos
     print("How would you like to use Telos?\n")
-    print("1. Just get it running (Recommended) - We handle the AI, you just track")
-    print("   Includes a 7-day free trial, then $3/month. Cancel anytime.")
+    print("━━━ Option 1: Cloud Mode (Recommended) ━━━━━━━━━━━━━━━━━")
+    print("  We handle everything — zero setup, just track.")
+    print("  ✓ 7-day free trial, then $3/month. Cancel anytime.")
+    print("  ✓ AI analysis powered by our servers")
+    print("  ✓ Daily email reports")
+    print("  ✓ No API key needed")
     print()
-    print("2. Bring your own API key - Use your own Gemini API key (free tier available)")
+    print("━━━ Option 2: Bring Your Own Key (Free Forever) ━━━━━━━━")
+    print("  Use your own Gemini API key. Free, unlimited, forever.")
+    print("  ✓ All core features: tracking, AI analysis, timeline")
+    print("  ✓ AI chat, MCP server, daily summaries")
+    print("  ✓ No trial, no expiration, no payments")
+    print("  ✗ No daily email reports (requires cloud)")
+    print("  ✗ You manage your own API key + usage")
     print()
     
     mode = input("Enter choice (1 or 2) [1]: ").strip() or "1"
     
     if mode == "1":
         # Cloud mode - enable backend
-        print("\n[OK] Setting things up...")
+        print("\n[OK] Setting up Cloud mode...")
         config['backend']['enabled'] = True
         config['backend']['url'] = "https://telos-backend-ae7k4avtpq-el.a.run.app"
         config['backend']['fallback_to_local'] = False
         # Set placeholder API key (not used in backend mode)
         config['gemini']['api_key'] = "BACKEND_MODE_NO_KEY_NEEDED"
+        
+        # Store mode for analytics
+        if 'account' not in config:
+            config['account'] = {}
+        config['account']['mode'] = 'cloud'
         
         # Add Firebase configuration for backend authentication
         if 'firebase' not in config:
@@ -581,12 +596,14 @@ def interactive_setup():
         config['firebase']['auth_domain'] = "gen-lang-client-0772617718.firebaseapp.com"
         config['firebase']['project_id'] = "gen-lang-client-0772617718"
         
-        print("[OK] You're all set!")
-        print("     Your 7-day free trial starts now. After that, it's $3/month. Cancel anytime.")
+        print("[OK] Cloud mode configured!")
+        print("     Your 7-day free trial starts when you launch Telos.")
+        print("     After that, it's $3/month. Cancel anytime.")
     else:
         # Local mode - prompt for API key
-        print("\n    You'll need a free Gemini API key.")
-        print("    Get one from: https://aistudio.google.com/app/apikey\n")
+        print("\n━━━ BYOK Setup ━━━")
+        print("You'll need a Gemini API key (free tier: 1,500 requests/day).")
+        print("Get one from: https://aistudio.google.com/app/apikey\n")
         
         api_key = input("Enter your Gemini API key: ").strip()
         
@@ -597,9 +614,18 @@ def interactive_setup():
         else:
             config['gemini']['api_key'] = api_key
             print("[OK] API key configured")
+            print()
+            print("🔒 Your API key is stored locally at:")
+            print(f"   {config_path}")
+            print("   It never leaves your machine. Telos does not transmit it anywhere.")
         
         # Disable backend for local mode
         config['backend']['enabled'] = False
+        
+        # Store mode for analytics
+        if 'account' not in config:
+            config['account'] = {}
+        config['account']['mode'] = 'byok'
     
     # Save config
     with open(config_path, 'w') as f:
@@ -607,6 +633,7 @@ def interactive_setup():
     
     print(f"\n[OK] Configuration saved to {config_path}")
     print("[OK] Setup complete! Run 'telos' to start tracking.")
+    print(f"     Need help? Email anuragkurle27@gmail.com")
 
 
 def show_help():
