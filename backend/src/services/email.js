@@ -517,31 +517,22 @@ function generateReportHTML(summary, userName = 'there', reportUrl = null) {
   // ===== FULL TEMPLATE =====
   return `
 <!DOCTYPE html>
-<html lang="en" style="background-color: #0a0a0a; background: #0a0a0a;">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office" style="background:#0a0a0a;">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="x-apple-disable-message-reformatting">
     <meta name="color-scheme" content="dark only">
     <meta name="supported-color-schemes" content="dark only">
+    <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
     <title>Telos Daily Report</title>
-    <style>
-        :root { color-scheme: dark only; supported-color-schemes: dark only; }
-        body, html { background-color: #0a0a0a !important; }
-        .dark-bg { background-color: #0a0a0a !important; }
-        u + .body { background-color: #0a0a0a !important; }
-        @media (prefers-color-scheme: dark) {
-            body, html, .dark-bg { background-color: #0a0a0a !important; }
-        }
-    </style>
 </head>
-<body class="body dark-bg" style="margin: 0; padding: 0; background-color: #0a0a0a; background: #0a0a0a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-text-size-adjust: none;" bgcolor="#0a0a0a">
-    <div class="dark-bg" style="background-color: #0a0a0a; background: #0a0a0a; width: 100%; table-layout: fixed; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #0a0a0a; background: #0a0a0a;" bgcolor="#0a0a0a" class="dark-bg">
+<body style="margin:0;padding:0;word-spacing:normal;background:#0a0a0a;-webkit-text-size-adjust:none;" bgcolor="#0a0a0a">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#0a0a0a" style="background:#0a0a0a;min-width:100%;width:100%;table-layout:fixed;">
         <tr>
-            <td align="center" style="padding: 24px 10px;" bgcolor="#0a0a0a">
+            <td align="center" valign="top" bgcolor="#0a0a0a" style="background:#0a0a0a;padding:24px 10px;">
                 
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 600px; background-color: #0a0a0a;" bgcolor="#0a0a0a">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#0a0a0a;" bgcolor="#0a0a0a">
                     
                     <!-- Header -->
                     <tr>
@@ -808,7 +799,6 @@ function generateReportHTML(summary, userName = 'there', reportUrl = null) {
             </td>
         </tr>
     </table>
-    </div>
 </body>
 </html>
   `;
