@@ -7,7 +7,7 @@ How to deploy the backend to Cloud Run and build desktop executables.
 ### Prerequisites
 
 - Google Cloud SDK installed and authenticated
-- Phase 0 Firebase setup complete (see `PHASE_0_FIREBASE_SETUP.md`)
+- Firebase project configured
 - Gemini API key in Secret Manager
 
 ### Quick Deploy

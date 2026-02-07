@@ -1,238 +1,132 @@
-# Telos Client (Python)
+# Client
 
-This is the Telos desktop client - a Python TUI application for tracking screen activity.
+Python desktop application with a terminal UI. Distributed via PyPI as `telos-tracker`.
 
-## Quick Start
+**Install:** `pip install telos-tracker && telos setup && telos`
 
-### Option 1: pip install (Recommended)
+## What It Does
 
-```bash
-pip install telos-tracker
-telos setup
-telos
+- Captures screenshots every 30 seconds
+- Analyzes them with Gemini Vision AI to determine what you're working on
+- Stores structured insights locally in SQLite (screenshots are deleted immediately)
+- Shows a terminal dashboard with timeline, heatmaps, focus scores, and AI chat
+- Syncs data to Firestore for daily email reports (cloud mode)
+- Runs as a background service or interactive TUI
+
+Two modes:
+- **Cloud mode** -- 7-day free trial, then $3/month. No API key needed.
+- **BYOK mode** -- Free forever. Bring your own Gemini API key.
+
+## Project Structure
+
+```
+client/
+├── main.py                    # Entry point (dev), CLI commands, onboarding flow
+├── mcp_server.py              # MCP server for Claude Desktop / Cursor
+├── service.py                 # Windows background service daemon
+├── service_macos.py           # macOS LaunchAgent service
+├── core/
+│   ├── analyzer.py            # Gemini Vision API integration
+│   ├── backend_client.py      # Backend API client (cloud mode)
+│   ├── capture.py             # Screenshot capture + activity monitoring
+│   ├── daily_aggregator.py    # Daily summary generation, productivity scoring
+│   ├── dashboard_server.py    # Local web dashboard (Flask, localhost:5555)
+│   ├── database.py            # SQLite operations
+│   ├── email_reporter.py      # Legacy email reporter (SMTP)
+│   ├── fallback_handler.py    # Backend → local Gemini → offline fallback
+│   ├── firebase_auth.py       # Firebase authentication
+│   ├── firestore_sync.py      # Background sync: SQLite → Firestore
+│   ├── goal_manager.py        # Analysis goals management
+│   ├── onboarding.py          # First-run state management
+│   ├── query_engine.py        # AI chat engine
+│   ├── session_builder.py     # Group captures into work sessions
+│   └── trial_manager.py       # Trial period tracking
+├── tui/
+│   ├── app.py                 # Main Textual TUI application
+│   ├── screens/               # All TUI screens (dashboard, timeline, chat, etc.)
+│   ├── widgets/               # Custom widgets (heatmap, waveform, breakdown)
+│   ├── workers/               # Background workers (capture, sync, email)
+│   └── models/                # TUI state management
+├── utils/
+│   ├── config_manager.py      # YAML config loading and saving
+│   ├── hash_utils.py          # Perceptual hashing for duplicate detection
+│   ├── prompt_loader.py       # AI prompt template loading
+│   └── sentry_utils.py        # Sentry error tracking
+├── telos_tracker/
+│   ├── __init__.py            # Package version
+│   └── cli.py                 # CLI entry point (telos command)
+├── prompts/                   # AI prompt templates (editable)
+│   ├── screenshot_analysis.txt
+│   ├── session_enrichment.txt
+│   ├── daily_summary.txt
+│   └── ai_chat_system.txt
+├── pyproject.toml             # PyPI package config
+├── requirements.txt           # Python dependencies
+├── publish.ps1                # Windows PyPI publish script
+├── publish.sh                 # Linux/macOS PyPI publish script
+├── build_installer.py         # Windows executable builder (PyInstaller)
+├── build_macos.py             # macOS .app bundle builder
+└── config.yaml.example        # Configuration template
 ```
 
-Your data is stored in `~/.telos/`.
-
-### Option 2: From Source (Development)
+## Local Development
 
 ```bash
-# Install dependencies
+cd client
 pip install -r requirements.txt
-
-# Run setup wizard
-python main.py setup
-
-# Start the TUI
-python main.py
-
-# Run as background service
-python service.py start
+python main.py setup           # Interactive setup wizard
+python main.py                 # Launch TUI
 ```
 
-## Development
+Other commands:
 
-See the main repository README for full documentation: [`../README.md`](../README.md)
+```bash
+python main.py test            # Test capture loop
+python main.py stats           # Show statistics
+python main.py service-console # Run as background daemon
+```
 
-## Structure
+## TUI Keyboard Shortcuts
 
-- `core/` - Core functionality (capture, analysis, database)
-- `tui/` - Terminal user interface (Textual framework)
-- `utils/` - Shared utilities
-- `prompts/` - AI prompts for Gemini
+| Key | Screen |
+|-----|--------|
+| `D` | Dashboard |
+| `T` | Timeline |
+| `S` | Summary |
+| `A` | AI Chat |
+| `C` | Settings |
+| `E` | Email settings (from settings) |
+| `G` | Goals |
+| `H` | Help |
+| `Q` | Quit |
 
 ## Configuration
 
-Copy `config.yaml.example` to `config.yaml` and fill in your settings:
+Created by `telos setup` at `~/.telos/config.yaml`. Key settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `capture.interval_seconds` | 30 | Screenshot interval |
+| `capture.idle_threshold` | 300 | Seconds before marking idle |
+| `backend.enabled` | true (cloud) | Use cloud backend for analysis |
+| `backend.url` | Cloud Run URL | Backend API endpoint |
+| `email.enabled` | true | Daily email reports |
+| `email.send_time` | 21:00 | When to send daily report |
+
+## Publishing to PyPI
 
 ```bash
-cp config.yaml.example config.yaml
-# Edit config.yaml with your Gemini API key
+# Automated (handles version bump, build, upload, tag)
+.\publish.ps1 0.2.7 "Description of changes"
+
+# Manual
+python -m build
+twine upload dist/*
 ```
 
-Get your Gemini API key from: https://aistudio.google.com/app/apikey
-
-## Features
-
-- 📸 **Automatic Screen Monitoring** - Captures your activity in the background
-- 🤖 **AI-Powered Analysis** - Gemini Vision understands what you're working on
-- 📊 **Smart Session Building** - Groups activities into meaningful sessions
-- 💬 **AI Chat Interface** - Ask questions about your work patterns
-- 📧 **Daily Email Reports** - Beautiful summaries via Gmail
-- 🖥️ **Terminal UI** - Clean, responsive TUI with real-time updates
-- 🔒 **Privacy-First** - Screenshots analyzed and immediately deleted
-
-## Usage
-
-### TUI Mode (Default)
-```bash
-python main.py
-```
-
-**Keyboard shortcuts:**
-- **D** - Dashboard (main view)
-- **T** - Timeline (session view)
-- **S** - Summary (daily insights)
-- **C** - Settings
-- **A** - AI Chat (query your data)
-- **G** - Edit analysis goals
-- **Q** - Quit
-
-### CLI Commands
-```bash
-python main.py setup              # First-time setup
-python main.py test               # Test capture loop
-python main.py stats              # Show statistics
-python main.py set-goals          # Configure analysis goals
-python main.py build-sessions     # Manual session building
-python main.py generate-summary   # Generate daily summary
-python main.py test-email         # Test email configuration
-```
-
-### Background Service
-
-**Windows:**
-```bash
-python main.py service-console    # Run as daemon (test mode)
-python main.py install-service    # Install Windows service
-python main.py start-service      # Start service
-python main.py stop-service       # Stop service
-```
-
-**macOS:**
-```bash
-python main.py service-console    # Run as daemon (test mode)
-python main.py install-service    # Install LaunchAgent
-python main.py start-service      # Start service
-python main.py stop-service       # Stop service
-python main.py service-status     # Check service status
-```
-
-## Building Standalone Applications
-
-### Windows Build
+## Building Desktop Apps
 
 ```bash
-# Install PyInstaller
-pip install pyinstaller
-
-# Build Windows executable and installer
-python build_installer.py
-
-# Output: dist/Telos.exe and TelosSetup-v0.1.0.exe
+python build_installer.py      # Windows → dist/Telos.exe
+python build_macos.py          # macOS → dist/Telos.app
 ```
-
-### macOS Build
-
-```bash
-# Install PyInstaller
-pip install pyinstaller
-
-# Build macOS .app bundle and DMG
-python build_macos.py
-
-# Output: dist/Telos.app and Telos-v0.1.0-beta-macOS.dmg
-```
-
-**macOS Installation:**
-1. Open the DMG file
-2. Drag `Telos.app` to Applications folder
-3. Right-click → Open (first time only, to bypass Gatekeeper)
-4. Grant **Screen Recording** permission when prompted
-5. Grant **Accessibility** permission when prompted
-
-**macOS Permissions:**
-- **Screen Recording** - Required for screenshot capture
-- **Accessibility** - Required for keyboard/mouse activity detection
-
-To grant permissions manually:
-1. Open System Settings → Privacy & Security → Privacy
-2. Select "Screen Recording" → Enable Telos
-3. Select "Accessibility" → Enable Telos
-4. Restart Telos
-
-**Creating an Icon:**
-If you want to customize the macOS icon:
-```bash
-cd macos
-python create_icns.py your-icon.png
-# This creates icon.icns, then rebuild with python build_macos.py
-```
-
-## Technical Details
-
-- **Language:** Python 3.8+
-- **UI Framework:** Textual (async TUI)
-- **Database:** SQLite (3-tier architecture)
-- **AI:** Google Gemini 2.5 Flash
-- **Screenshot:** Pillow + ImageHash (perceptual hashing)
-- **Activity Detection:** pynput (cross-platform)
-
-## Troubleshooting
-
-**"telos is unrecognized" after pip install**
-
-If you get "command not found" or "telos is unrecognized" after installing:
-
-1. **Check if it's installed:**
-   ```bash
-   pip show telos-tracker
-   ```
-
-2. **Try running via Python module:**
-   ```bash
-   python -m telos_tracker.cli help
-   ```
-
-3. **Add Python Scripts to PATH:**
-   - **Windows:** Add `C:\Users\<YourUser>\AppData\Local\Programs\Python\Python3xx\Scripts` to PATH
-   - **Mac/Linux:** Add `~/.local/bin` to PATH in `~/.bashrc` or `~/.zshrc`:
-     ```bash
-     export PATH="$HOME/.local/bin:$PATH"
-     ```
-
-4. **Restart your terminal** after modifying PATH
-
-5. **Or use pipx (recommended for CLI tools):**
-   ```bash
-   pipx install telos-tracker
-   telos help
-   ```
-
-**Configuration Issues**
-- Run `telos setup` (or `python main.py setup`) for guided configuration
-- Check `~/.telos/config.yaml` for correct API key
-
-**API Quota**
-- Free tier: 1500 requests/day
-- Perceptual hashing reduces calls by ~50%
-- Adjust `capture.interval_seconds` in config
-
-**Activity Detection**
-- **macOS**: Grant Screen Recording and Accessibility permissions in System Settings
-  - System Settings → Privacy & Security → Privacy → Screen Recording
-  - System Settings → Privacy & Security → Privacy → Accessibility
-- **Windows**: Run as administrator if needed
-- **Linux**: Check `xinput` permissions
-
-## Status
-
-✅ **Fully Functional** - All features complete and working
-
-This client works standalone with your own Gemini API key. The backend (Node.js) is being built to enable SaaS features (no API key required, cloud sync, etc.).
-
----
-
-**For Backend Integration:**
-
-Once the backend is deployed, you can configure the client to use it:
-
-```yaml
-# In config.yaml (future)
-backend:
-  enabled: true
-  url: "https://your-backend.run.app"
-```
-
-The client will then upload screenshots to your backend instead of calling Gemini directly, keeping your AI prompts proprietary.
-

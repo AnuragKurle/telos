@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Website
 
-## Getting Started
+Next.js static site deployed to Firebase Hosting. Serves the marketing pages and admin dashboard.
 
-First, run the development server:
+## What It Does
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**Public pages:**
+- Landing page with features, pricing, how-it-works
+- Privacy policy
+- MCP server documentation
+- Waitlist signup (writes to Firestore)
+
+**Admin dashboard (`/admin`):**
+- Overview stats (signups, active users, trials)
+- Waitlist management
+- User management
+- Email campaign management (batch invitations)
+- Referral tracking
+
+**Firebase Functions:**
+- `notifySlackOnWaitlist` -- Slack notification when someone joins the waitlist
+- `notifyOnNewUser` -- Slack notification when a Firebase Auth user is created
+
+## Project Structure
+
+```
+website/
+├── app/
+│   ├── page.tsx               # Landing page
+│   ├── layout.tsx             # Root layout
+│   ├── globals.css            # Tailwind theme
+│   ├── privacy/page.tsx       # Privacy policy
+│   ├── mcp/page.tsx           # MCP documentation
+│   └── admin/
+│       ├── layout.tsx         # Admin layout with auth
+│       ├── page.tsx           # Admin dashboard
+│       ├── waitlist/page.tsx  # Waitlist management
+│       ├── users/page.tsx     # User management
+│       ├── campaigns/page.tsx # Email campaigns
+│       └── referrals/page.tsx # Referral tracking
+├── components/
+│   ├── Hero.tsx               # Hero section with email signup
+│   ├── Features.tsx           # Features section
+│   ├── HowItWorks.tsx         # How it works section
+│   ├── Pricing.tsx            # Pricing section
+│   ├── WaitlistCTA.tsx        # Waitlist call-to-action
+│   ├── Vision.tsx             # Vision section
+│   ├── FeatureCard.tsx        # Feature card component
+│   ├── TerminalFrame.tsx      # Terminal frame component
+│   └── TypewriterEffect.tsx   # Typewriter animation
+├── functions/
+│   ├── index.js               # Firebase Cloud Functions
+│   ├── slack-app-manifest.json
+│   └── package.json
+├── firebase.json              # Firebase hosting + functions config
+├── firestore.rules            # Firestore security rules
+├── env.example                # Environment variable template
+├── next.config.ts
+├── tsconfig.json
+└── package.json
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Local Development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp env.example .env.local      # Edit with your Firebase config
+npm install
+npm run dev                    # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deploy
 
-## Learn More
+```bash
+npm run build
+npx firebase deploy --only hosting
 
-To learn more about Next.js, take a look at the following resources:
+# Deploy functions separately
+cd functions && npm install
+npx firebase deploy --only functions
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment Variables
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Create `.env.local` from `env.example`:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Web API key |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `NEXT_PUBLIC_BACKEND_URL` | Backend Cloud Run URL |
