@@ -28,44 +28,44 @@ function generateInvitationHTML(email) {
     <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
     <title>Welcome to Telos</title>
 </head>
-<body style="margin:0;padding:0;word-spacing:normal;background:#0a0a0a;-webkit-text-size-adjust:none;" bgcolor="#0a0a0a">
+<body style="margin:0;padding:0;word-spacing:normal;background:#0a0a0a;-webkit-text-size-adjust:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" bgcolor="#0a0a0a">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#0a0a0a" style="background:#0a0a0a;min-width:100%;width:100%;table-layout:fixed;">
         <tr>
             <td align="center" valign="top" bgcolor="#0a0a0a" style="background:#0a0a0a;padding:20px 10px;">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#0a0a0a;" bgcolor="#0a0a0a">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;" bgcolor="#0a0a0a">
 
                     <!-- Header -->
                     <tr>
-                        <td style="padding: 24px 24px 12px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0; font-family: monospace; font-size: 20px; font-weight: 700; color: #22c55e;">telos</p>
+                        <td style="padding: 28px 28px 14px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0; font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 22px; font-weight: 700; color: #22c55e;">telos</p>
                         </td>
                     </tr>
 
                     <!-- ─── Welcome + Install First ─── -->
                     <tr>
-                        <td style="padding: 12px 24px 20px;" bgcolor="#0a0a0a">
-                            <h1 style="margin: 0 0 16px 0; font-size: 26px; font-weight: 700; color: #ededed; line-height: 1.35;">
+                        <td style="padding: 12px 28px 24px;" bgcolor="#0a0a0a">
+                            <h1 style="margin: 0 0 18px 0; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size: 28px; font-weight: 700; color: #ededed; line-height: 1.35;">
                                 We're thrilled to have you on board!
                             </h1>
-                            <p style="margin: 0 0 16px 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
+                            <p style="margin: 0 0 18px 0; font-size: 17px; color: #d4d4d4; line-height: 1.7;">
                                 Your access is ready. To get started, just open your command prompt or terminal and run:
                             </p>
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
                                 <tr>
-                                    <td style="padding: 20px;" bgcolor="#111111">
+                                    <td style="padding: 22px;" bgcolor="#111111">
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                                             <tr>
-                                                <td style="padding: 14px 18px; background-color: #1a1a1a; border-radius: 6px; font-family: monospace; font-size: 15px; color: #22c55e; line-height: 1.8;" bgcolor="#1a1a1a">
+                                                <td style="padding: 16px 20px; background-color: #1a1a1a; border-radius: 8px; font-family: 'SF Mono','Cascadia Code','Fira Code',Consolas,monospace; font-size: 17px; color: #22c55e; line-height: 2;" bgcolor="#1a1a1a">
                                                     pip install telos-tracker<br/>
                                                     telos setup
                                                 </td>
                                             </tr>
                                         </table>
-                                        <p style="margin: 14px 0 0 0; font-size: 13px; color: #a3a3a3; line-height: 1.5;">
+                                        <p style="margin: 16px 0 0 0; font-size: 15px; color: #a3a3a3; line-height: 1.6;">
                                             That's it&nbsp;&mdash;&nbsp;installs in 30 seconds. Works on <strong style="color: #d4d4d4;">Windows</strong> and <strong style="color: #d4d4d4;">macOS</strong>.
                                         </p>
-                                        <p style="margin: 6px 0 0 0; font-size: 12px; color: #737373; line-height: 1.5;">
-                                            Don't have Python? <a href="https://www.python.org/downloads/" style="color: #22c55e; text-decoration: underline;">Install Python</a> (pip is included). Or use <span style="font-family: monospace; color: #a3a3a3;">pipx install telos-tracker</span> if you prefer.
+                                        <p style="margin: 8px 0 0 0; font-size: 14px; color: #737373; line-height: 1.6;">
+                                            Don't have Python? <a href="https://www.python.org/downloads/" style="color: #22c55e; text-decoration: underline;">Install Python</a> (pip is included). Or use <span style="font-family: 'SF Mono',Consolas,monospace; color: #a3a3a3;">pipx install telos-tracker</span> if you prefer.
                                         </p>
                                     </td>
                                 </tr>
@@ -75,11 +75,11 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── What Telos does ─── -->
                     <tr>
-                        <td style="padding: 0 24px 24px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 14px 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
+                        <td style="padding: 0 28px 28px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 16px 0; font-size: 17px; color: #d4d4d4; line-height: 1.7;">
                                 <strong style="color: #ededed;">Telos maps your screen time, automatically.</strong> It runs quietly in the background, uses AI to understand what you're working on, and turns your day into a clear, searchable timeline. No manual logging. No browser extensions. Just clarity about where your hours actually go.
                             </p>
-                            <p style="margin: 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
+                            <p style="margin: 0; font-size: 17px; color: #d4d4d4; line-height: 1.7;">
                                 Your screenshots are analyzed in real-time and immediately deleted&nbsp;&mdash;&nbsp;only the insights stay, encrypted and anonymous.
                             </p>
                         </td>
@@ -87,21 +87,21 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── What you'll see ─── -->
                     <tr>
-                        <td style="padding: 0 24px 24px;" bgcolor="#0a0a0a">
+                        <td style="padding: 0 28px 28px;" bgcolor="#0a0a0a">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
                                 <tr>
-                                    <td style="padding: 20px;" bgcolor="#111111">
-                                        <p style="margin: 0 0 14px 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">What you'll see</p>
-                                        <p style="margin: 0 0 10px 0; font-size: 14px; color: #d4d4d4; line-height: 1.65;">
+                                    <td style="padding: 24px;" bgcolor="#111111">
+                                        <p style="margin: 0 0 16px 0; font-size: 13px; font-weight: 600; color: #737373; text-transform: uppercase; letter-spacing: 0.12em;">What you'll see</p>
+                                        <p style="margin: 0 0 14px 0; font-size: 16px; color: #d4d4d4; line-height: 1.7;">
                                             <strong style="color: #ededed;">Your real patterns</strong>&nbsp;&mdash;&nbsp;how much time is deep work vs. meetings vs. browsing, broken down by app and activity, every single day.
                                         </p>
-                                        <p style="margin: 0 0 10px 0; font-size: 14px; color: #d4d4d4; line-height: 1.65;">
+                                        <p style="margin: 0 0 14px 0; font-size: 16px; color: #d4d4d4; line-height: 1.7;">
                                             <strong style="color: #ededed;">Where your time drifts</strong>&nbsp;&mdash;&nbsp;the context switches you didn't notice, the rabbit holes, the apps that quietly ate an hour.
                                         </p>
-                                        <p style="margin: 0 0 10px 0; font-size: 14px; color: #d4d4d4; line-height: 1.65;">
-                                            <strong style="color: #ededed;">Answers on demand</strong>&nbsp;&mdash;&nbsp;ask things like <em style="color: #a3a3a3;">"How much time did I spend coding today?"</em> or <em style="color: #a3a3a3;">"What happened between 2 and 4pm?"</em> in plain English.
+                                        <p style="margin: 0 0 14px 0; font-size: 16px; color: #d4d4d4; line-height: 1.7;">
+                                            <strong style="color: #ededed;">Answers on demand</strong>&nbsp;&mdash;&nbsp;ask things like <em style="color: #b3b3b3;">"How much time did I spend coding today?"</em> or <em style="color: #b3b3b3;">"What happened between 2 and 4pm?"</em> in plain English.
                                         </p>
-                                        <p style="margin: 0; font-size: 14px; color: #d4d4d4; line-height: 1.65;">
+                                        <p style="margin: 0; font-size: 16px; color: #d4d4d4; line-height: 1.7;">
                                             <strong style="color: #ededed;">A daily summary in your inbox</strong>&nbsp;&mdash;&nbsp;a productivity report every morning with time breakdowns, focus scores, and personalized insights.
                                         </p>
                                     </td>
@@ -112,29 +112,29 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── 14 Days of Pro ─── -->
                     <tr>
-                        <td style="padding: 0 24px 6px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">Your early access perk</p>
+                        <td style="padding: 0 28px 8px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: #737373; text-transform: uppercase; letter-spacing: 0.12em;">Your early access perk</p>
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 0 24px 8px;" bgcolor="#0a0a0a">
+                        <td style="padding: 0 28px 10px;" bgcolor="#0a0a0a">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px; border-left: 3px solid #22c55e;" bgcolor="#111111">
                                 <tr>
-                                    <td style="padding: 20px;" bgcolor="#111111">
-                                        <p style="margin: 0 0 10px 0; font-size: 15px; font-weight: 600; color: #ededed; line-height: 1.4;">
+                                    <td style="padding: 24px;" bgcolor="#111111">
+                                        <p style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #ededed; line-height: 1.4;">
                                             14 days of Telos Pro, on us.
                                         </p>
-                                        <p style="margin: 0 0 14px 0; font-size: 13px; color: #d4d4d4; line-height: 1.6;">
+                                        <p style="margin: 0 0 16px 0; font-size: 16px; color: #d4d4d4; line-height: 1.65;">
                                             Because you signed up early, you get the full Pro experience&nbsp;&mdash;&nbsp;no credit card needed:
                                         </p>
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                                             <tr>
-                                                <td style="padding: 12px 16px; background-color: #1a1a1a; border-radius: 8px;" bgcolor="#1a1a1a">
-                                                    <p style="margin: 0 0 5px 0; font-size: 13px; color: #d4d4d4;">&#10003;&nbsp; AI-powered activity tracking &amp; timeline</p>
-                                                    <p style="margin: 0 0 5px 0; font-size: 13px; color: #d4d4d4;">&#10003;&nbsp; Ask questions about your day in plain English</p>
-                                                    <p style="margin: 0 0 5px 0; font-size: 13px; color: #d4d4d4;">&#10003;&nbsp; Daily email reports delivered to your inbox</p>
-                                                    <p style="margin: 0 0 5px 0; font-size: 13px; color: #d4d4d4;">&#10003;&nbsp; Data export (CSV &amp; JSON)</p>
-                                                    <p style="margin: 0; font-size: 13px; color: #d4d4d4;">&#10003;&nbsp; Unlimited history retention</p>
+                                                <td style="padding: 14px 18px; background-color: #1a1a1a; border-radius: 8px;" bgcolor="#1a1a1a">
+                                                    <p style="margin: 0 0 8px 0; font-size: 15px; color: #d4d4d4; line-height: 1.5;">&#10003;&nbsp; AI-powered activity tracking &amp; timeline</p>
+                                                    <p style="margin: 0 0 8px 0; font-size: 15px; color: #d4d4d4; line-height: 1.5;">&#10003;&nbsp; Ask questions about your day in plain English</p>
+                                                    <p style="margin: 0 0 8px 0; font-size: 15px; color: #d4d4d4; line-height: 1.5;">&#10003;&nbsp; Daily email reports delivered to your inbox</p>
+                                                    <p style="margin: 0 0 8px 0; font-size: 15px; color: #d4d4d4; line-height: 1.5;">&#10003;&nbsp; Data export (CSV &amp; JSON)</p>
+                                                    <p style="margin: 0; font-size: 15px; color: #d4d4d4; line-height: 1.5;">&#10003;&nbsp; Unlimited history retention</p>
                                                 </td>
                                             </tr>
                                         </table>
@@ -146,34 +146,34 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── Pricing honesty + BYOK ─── -->
                     <tr>
-                        <td style="padding: 16px 24px 6px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">A note about pricing</p>
+                        <td style="padding: 18px 28px 8px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: #737373; text-transform: uppercase; letter-spacing: 0.12em;">A note about pricing</p>
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 0 24px 8px;" bgcolor="#0a0a0a">
+                        <td style="padding: 0 28px 10px;" bgcolor="#0a0a0a">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
                                 <tr>
-                                    <td style="padding: 20px;" bgcolor="#111111">
-                                        <p style="margin: 0 0 12px 0; font-size: 14px; color: #d4d4d4; line-height: 1.65;">
+                                    <td style="padding: 24px;" bgcolor="#111111">
+                                        <p style="margin: 0 0 14px 0; font-size: 16px; color: #d4d4d4; line-height: 1.7;">
                                             Every screen analysis is an AI call that costs money to run&nbsp;&mdash;&nbsp;on top of servers, encryption, and storage. To keep building Telos, Pro is <strong style="color: #ededed;">$3/month</strong> after your 14 days.
                                         </p>
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #1a1a1a; border-radius: 8px; border-left: 3px solid #a855f7;" bgcolor="#1a1a1a">
                                             <tr>
-                                                <td style="padding: 16px;" bgcolor="#1a1a1a">
-                                                    <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 600; color: #a855f7;">
+                                                <td style="padding: 18px;" bgcolor="#1a1a1a">
+                                                    <p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600; color: #a855f7;">
                                                         But you don't have to pay at all.
                                                     </p>
-                                                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #d4d4d4; line-height: 1.6;">
+                                                    <p style="margin: 0 0 12px 0; font-size: 15px; color: #d4d4d4; line-height: 1.65;">
                                                         Bring your own Gemini API key (free from Google) and Telos runs entirely on your machine, forever. All the core features&nbsp;&mdash;&nbsp;tracking, AI chat, timeline, summaries&nbsp;&mdash;&nbsp;stay free. The only thing you'll miss is the daily email reports, which need our cloud.
                                                     </p>
-                                                    <p style="margin: 0; font-size: 12px; color: #737373;">
+                                                    <p style="margin: 0; font-size: 14px; color: #737373;">
                                                         Get your free Gemini key&nbsp;&rarr;&nbsp;<a href="https://aistudio.google.com/app/apikey" style="color: #a855f7; text-decoration: underline;">aistudio.google.com</a>
                                                     </p>
                                                 </td>
                                             </tr>
                                         </table>
-                                        <p style="margin: 12px 0 0 0; font-size: 13px; color: #737373; line-height: 1.6;">
+                                        <p style="margin: 14px 0 0 0; font-size: 15px; color: #737373; line-height: 1.65;">
                                             After 14&nbsp;days: keep Pro for $3/mo, switch to the free BYOK mode, or just stop. No card on file, no pressure.
                                         </p>
                                     </td>
@@ -184,11 +184,11 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── Referral tease ─── -->
                     <tr>
-                        <td style="padding: 16px 24px 8px;" bgcolor="#0a0a0a">
+                        <td style="padding: 18px 28px 10px;" bgcolor="#0a0a0a">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px; border-left: 3px solid #f59e0b;" bgcolor="#111111">
                                 <tr>
-                                    <td style="padding: 16px 20px;" bgcolor="#111111">
-                                        <p style="margin: 0; font-size: 13px; color: #d4d4d4; line-height: 1.6;">
+                                    <td style="padding: 18px 22px;" bgcolor="#111111">
+                                        <p style="margin: 0; font-size: 15px; color: #d4d4d4; line-height: 1.65;">
                                             <strong style="color: #f59e0b;">Want Pro without paying?</strong>&nbsp;&nbsp;Once you're set up, you'll find a referral link in Settings. Share it with friends&nbsp;&mdash;&nbsp;every friend who signs up gets you <strong style="color: #ededed;">1 month of Pro free</strong> (up to 12 months).
                                         </p>
                                     </td>
@@ -199,8 +199,8 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── Feedback CTA ─── -->
                     <tr>
-                        <td style="padding: 16px 24px 8px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
+                        <td style="padding: 18px 28px 10px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0; font-size: 17px; color: #d4d4d4; line-height: 1.7;">
                                 We're genuinely excited for you to try Telos. This is an early build and your feedback means everything to us&nbsp;&mdash;&nbsp;<strong style="color: #ededed;">just hit reply anytime</strong> and tell us what you think, what's broken, or what you wish it did. We read every single reply.
                             </p>
                         </td>
@@ -208,8 +208,8 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── Sign off ─── -->
                     <tr>
-                        <td style="padding: 16px 24px 8px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0; font-size: 14px; color: #a3a3a3; line-height: 1.6;">
+                        <td style="padding: 18px 28px 10px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0; font-size: 16px; color: #a3a3a3; line-height: 1.6;">
                                 Happy tracking,<br/>
                                 <span style="color: #ededed;">The Telos Team</span>
                             </p>
@@ -218,11 +218,11 @@ function generateInvitationHTML(email) {
 
                     <!-- ─── Footer ─── -->
                     <tr>
-                        <td style="padding: 28px 24px 16px; border-top: 1px solid #1a1a1a; text-align: center;" bgcolor="#0a0a0a">
-                            <p style="margin: 0 0 8px 0; font-family: monospace; font-size: 13px; color: #525252;">
+                        <td style="padding: 32px 28px 20px; border-top: 1px solid #1a1a1a; text-align: center;" bgcolor="#0a0a0a">
+                            <p style="margin: 0 0 10px 0; font-family: 'SF Mono',Consolas,monospace; font-size: 14px; color: #525252;">
                                 <span style="color: #22c55e; font-weight: 600;">telos</span> &middot; know where your time goes
                             </p>
-                            <p style="margin: 0; font-size: 11px; color: #404040; line-height: 1.8;">
+                            <p style="margin: 0; font-size: 13px; color: #404040; line-height: 1.8;">
                                 You're receiving this because you signed up at <a href="https://gen-lang-client-0772617718.web.app/" style="color: #525252; text-decoration: underline;">telos</a>.
                                 <br/>
                                 <a href="mailto:anuragkurle27@gmail.com?subject=Unsubscribe%20from%20Telos%20invitations" style="color: #525252; text-decoration: underline;">Unsubscribe</a>
