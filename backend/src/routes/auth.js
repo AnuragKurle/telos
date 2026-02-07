@@ -244,7 +244,7 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
           }
         });
         // Send Slack Notification for Backfill/New Activation
-        sendTrialActivationNotification(safeEmail, trialStartDate);
+        sendTrialActivationNotification(safeEmail, trialStartDate).catch(err => console.error('[SLACK] Failed to send trial activation notification:', err));
       } else {
         // Return existing trial info
         trialEndDate = userData.trial.endDate.toDate();
@@ -357,7 +357,7 @@ router.post('/verify-access', verifyFirebaseToken, async (req, res) => {
       }
 
       // Send Slack Notification with mode
-      sendTrialActivationNotification(safeEmail, trialStartDate, userMode);
+      sendTrialActivationNotification(safeEmail, trialStartDate, userMode).catch(err => console.error('[SLACK] Failed to send trial activation notification:', err));
     }
 
     return res.json({
