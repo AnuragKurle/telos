@@ -52,7 +52,7 @@ dev = [
 
 [project.scripts]
 telos = "telos_tracker.cli:main"
-telos-mcp = "mcp_server:main"
+telos-mcp = "telos_tracker.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/telos"

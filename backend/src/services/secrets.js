@@ -115,7 +115,7 @@ export async function getSlackWebhook() {
  * @returns {Promise<string|null>} Slack Signup Webhook URL or null if not found
  */
 export async function getSlackSignupWebhook() {
-  // Try Secret Manager first
+  // Try dedicated signup webhook from Secret Manager first
   try {
     const secretName = process.env.SLACK_SIGNUP_WEBHOOK_SECRET_NAME || 'SLACK_SIGNUP_WEBHOOK';
     return await getSecret(secretName);
@@ -124,8 +124,11 @@ export async function getSlackSignupWebhook() {
     if (process.env.SLACK_SIGNUP_WEBHOOK) {
       return process.env.SLACK_SIGNUP_WEBHOOK;
     }
-    return null;
   }
+
+  // Fall back to general Slack webhook (which IS configured in deployment)
+  console.log('[SECRETS] SLACK_SIGNUP_WEBHOOK not found, falling back to general SLACK_WEBHOOK');
+  return await getSlackWebhook();
 }
 
 /**
