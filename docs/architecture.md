@@ -28,29 +28,136 @@ telos/
 | Secrets | Google Secret Manager | API keys storage |
 | Website | Next.js, Firebase Hosting | Waitlist landing page |
 
-## Data Flow
+## System Diagram
+
+```mermaid
+graph TB
+    subgraph userMachine ["User's Machine"]
+        capture["Screenshot Capture\n(every 30s)"]
+        tui["Telos TUI\n(Python / Textual)"]
+        sqlite["SQLite Database"]
+        localDash["Local Web Dashboard\n(Flask :5555)"]
+        mcpServer["MCP Server\n(Claude / Cursor)"]
+        bgService["Background Service\n(Windows / macOS)"]
+    end
+
+    subgraph cloudRun ["Google Cloud Run (asia-south1)"]
+        backend["Express API"]
+        authMW["Auth Middleware\n(Firebase token check)"]
+        rateLimitMW["Rate Limiter\n(100/hr, 2000/day)"]
+        analyzeRoute["POST /v1/analyze/screenshot"]
+        reportsRoute["POST /v1/reports/trigger-daily-emails"]
+        adminRoute["Admin API\n(waitlist, campaigns, users)"]
+        emailService["Email Service\n(HTML report generation)"]
+        slackService["Slack Service\n(24+ notification types)"]
+        scheduler["Scheduler\n(runs every 30 min)"]
+        summaryGen["Summary Generator\n(AI narrative from usage data)"]
+    end
+
+    subgraph firebase ["Firebase"]
+        fireAuth["Firebase Auth\n(Anonymous + Email)"]
+        firestore["Firestore\n(users, prompts, usage, referrals)"]
+        fireHosting["Firebase Hosting"]
+        cloudFunctions["Cloud Functions\n(waitlist + signup Slack alerts)"]
+    end
+
+    subgraph website ["Website (Next.js)"]
+        landingPage["Landing Page\n(features, pricing, privacy)"]
+        adminDash["Admin Dashboard\n(/admin)"]
+    end
+
+    subgraph external ["External Services"]
+        gemini["Google Gemini 2.5 Flash\n(Vision API)"]
+        portkey["Portkey\n(AI gateway / observability)"]
+        sendgrid["SendGrid\n(transactional email)"]
+        slack["Slack\n(webhook notifications)"]
+        dodoPay["Dodo Payments\n($3/mo Pro plan)"]
+        secretMgr["GCP Secret Manager\n(API keys)"]
+        cloudScheduler["Cloud Scheduler\n(hourly cron)"]
+        pypi["PyPI\n(telos-tracker)"]
+    end
+
+    %% Installation
+    pypi -- "pip install telos-tracker" --> tui
+
+    %% Client internal flow
+    capture --> tui
+    tui --> sqlite
+    sqlite --> localDash
+    sqlite --> mcpServer
+    bgService -. "headless mode" .-> capture
+
+    %% Client to Backend
+    tui -- "screenshot + Firebase token" --> authMW
+    authMW --> rateLimitMW
+    rateLimitMW --> analyzeRoute
+
+    %% Client to Firebase
+    tui -- "sign in / token refresh" --> fireAuth
+
+    %% Client Firestore sync
+    tui -- "sync SQLite data\n(every 4 hours)" --> firestore
+
+    %% Backend to Gemini
+    analyzeRoute -- "image analysis" --> portkey
+    portkey --> gemini
+
+    %% Backend to Firestore
+    backend --> firestore
+    summaryGen -- "read usage data" --> firestore
+
+    %% Backend secrets
+    backend -- "load API keys" --> secretMgr
+
+    %% Email flow
+    cloudScheduler -- "hourly trigger" --> reportsRoute
+    reportsRoute --> scheduler
+    scheduler --> summaryGen
+    summaryGen --> emailService
+    emailService -- "daily report" --> sendgrid
+    sendgrid -- "HTML email with charts" --> tui
+
+    %% Slack flow
+    slackService --> slack
+
+    %% Payments
+    dodoPay -- "webhook" --> backend
+
+    %% Website
+    fireHosting --> landingPage
+    fireHosting --> adminDash
+    adminDash -- "manage users, campaigns" --> adminRoute
+    landingPage -- "waitlist signup" --> firestore
+    cloudFunctions -- "on waitlist/signup" --> slack
+```
+
+## Data Flow (text)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User's Computer                          │
-│                                                                  │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
-│  │  Screenshot  │───▶│   Python     │───▶│   SQLite     │       │
-│  │   Capture    │    │   Analyzer   │    │   Database   │       │
-│  └──────────────┘    └──────┬───────┘    └──────────────┘       │
-│                             │                                    │
-└─────────────────────────────┼────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Google Cloud (Mumbai)                         │
-│                                                                  │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
-│  │  Cloud Run   │───▶│   Gemini     │    │  Firestore   │       │
-│  │   Backend    │    │   Vision     │    │   Prompts    │       │
-│  └──────────────┘    └──────────────┘    └──────────────┘       │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+1. Screenshot captured (every 30s)
+   └── Perceptual hash computed
+       └── Skip if duplicate of previous
+
+2. Image sent to backend
+   └── Rate limit checked (100/hr, 2000/day)
+       └── Gemini Vision API called via Portkey
+
+3. Response returned
+   └── Category, app, task, confidence
+       └── Stored in local SQLite
+
+4. Session building (on-demand)
+   └── Group similar activities
+       └── AI enrichment (summary, learnings)
+
+5. Firestore sync (every 4 hours)
+   └── SQLite data pushed to Firestore
+       └── Enables daily email reports
+
+6. Daily email report (at user's preferred time)
+   └── Cloud Scheduler triggers backend hourly
+       └── Backend checks timezone, generates summary
+           └── HTML email sent via SendGrid
 ```
 
 ## Key Components
@@ -108,30 +215,6 @@ telos/
 3. Token expires (1 hour)
    └── Client refreshes automatically
        └── New ID token stored
-```
-
-## Analysis Pipeline
-
-```
-1. Screenshot captured (every 30s)
-   └── Perceptual hash computed
-       └── Skip if duplicate of previous
-
-2. Image sent to backend
-   └── Rate limit checked (100/hr, 2000/day)
-       └── Gemini Vision API called
-
-3. Response returned
-   └── Category, app, task, confidence
-       └── Stored in local SQLite
-
-4. Session building (on-demand)
-   └── Group similar activities
-       └── AI enrichment (summary, learnings)
-
-5. Daily summary (9 PM)
-   └── Aggregate sessions
-       └── Email report (optional)
 ```
 
 ## Fallback Strategy
