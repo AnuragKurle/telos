@@ -26,7 +26,7 @@ function generateInvitationHTML(email) {
     <meta name="color-scheme" content="dark only">
     <meta name="supported-color-schemes" content="dark only">
     <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
-    <title>Your Telos access is ready</title>
+    <title>Welcome to Telos</title>
 </head>
 <body style="margin:0;padding:0;word-spacing:normal;background:#0a0a0a;-webkit-text-size-adjust:none;" bgcolor="#0a0a0a">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#0a0a0a" style="background:#0a0a0a;min-width:100%;width:100%;table-layout:fixed;">
@@ -41,15 +41,41 @@ function generateInvitationHTML(email) {
                         </td>
                     </tr>
 
-                    <!-- ─── Opening ─── -->
+                    <!-- ─── Welcome + Install First ─── -->
                     <tr>
-                        <td style="padding: 12px 24px 24px;" bgcolor="#0a0a0a">
-                            <h1 style="margin: 0 0 20px 0; font-size: 26px; font-weight: 700; color: #ededed; line-height: 1.35;">
-                                Your access is ready.
+                        <td style="padding: 12px 24px 20px;" bgcolor="#0a0a0a">
+                            <h1 style="margin: 0 0 16px 0; font-size: 26px; font-weight: 700; color: #ededed; line-height: 1.35;">
+                                We're thrilled to have you on board!
                             </h1>
-                            <p style="margin: 0 0 14px 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
-                                You signed up for Telos, and we're ready for you.
+                            <p style="margin: 0 0 16px 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
+                                Your access is ready. To get started, just open your command prompt or terminal and run:
                             </p>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
+                                <tr>
+                                    <td style="padding: 20px;" bgcolor="#111111">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td style="padding: 14px 18px; background-color: #1a1a1a; border-radius: 6px; font-family: monospace; font-size: 15px; color: #22c55e; line-height: 1.8;" bgcolor="#1a1a1a">
+                                                    pip install telos-tracker<br/>
+                                                    telos setup
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <p style="margin: 14px 0 0 0; font-size: 13px; color: #a3a3a3; line-height: 1.5;">
+                                            That's it&nbsp;&mdash;&nbsp;installs in 30 seconds. Works on <strong style="color: #d4d4d4;">Windows</strong> and <strong style="color: #d4d4d4;">macOS</strong>.
+                                        </p>
+                                        <p style="margin: 6px 0 0 0; font-size: 12px; color: #737373; line-height: 1.5;">
+                                            Don't have Python? <a href="https://www.python.org/downloads/" style="color: #22c55e; text-decoration: underline;">Install Python</a> (pip is included). Or use <span style="font-family: monospace; color: #a3a3a3;">pipx install telos-tracker</span> if you prefer.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- ─── What Telos does ─── -->
+                    <tr>
+                        <td style="padding: 0 24px 24px;" bgcolor="#0a0a0a">
                             <p style="margin: 0 0 14px 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
                                 <strong style="color: #ededed;">Telos maps your screen time, automatically.</strong> It runs quietly in the background, uses AI to understand what you're working on, and turns your day into a clear, searchable timeline. No manual logging. No browser extensions. Just clarity about where your hours actually go.
                             </p>
@@ -59,7 +85,7 @@ function generateInvitationHTML(email) {
                         </td>
                     </tr>
 
-                    <!-- ─── What it gives you ─── -->
+                    <!-- ─── What you'll see ─── -->
                     <tr>
                         <td style="padding: 0 24px 24px;" bgcolor="#0a0a0a">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
@@ -84,40 +110,9 @@ function generateInvitationHTML(email) {
                         </td>
                     </tr>
 
-                    <!-- ─── Install ─── -->
-                    <tr>
-                        <td style="padding: 0 24px 6px;" bgcolor="#0a0a0a">
-                            <p style="margin: 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">Get started</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 0 24px 8px;" bgcolor="#0a0a0a">
-                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #111111; border-radius: 10px;" bgcolor="#111111">
-                                <tr>
-                                    <td style="padding: 20px;" bgcolor="#111111">
-                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                                            <tr>
-                                                <td style="padding: 12px 16px; background-color: #1a1a1a; border-radius: 6px; font-family: monospace; font-size: 14px; color: #22c55e;" bgcolor="#1a1a1a">
-                                                    $ pip install telos-tracker<br/>
-                                                    $ telos setup
-                                                </td>
-                                            </tr>
-                                        </table>
-                                        <p style="margin: 12px 0 0 0; font-size: 13px; color: #a3a3a3; line-height: 1.5;">
-                                            That's it. Works on <strong style="color: #d4d4d4;">Windows</strong> and <strong style="color: #d4d4d4;">macOS</strong>.
-                                        </p>
-                                        <p style="margin: 6px 0 0 0; font-size: 12px; color: #737373; line-height: 1.5;">
-                                            Don't have Python or pip? <a href="https://www.python.org/downloads/" style="color: #22c55e; text-decoration: underline;">Install Python</a> (pip is included). Or use <span style="font-family: monospace; color: #a3a3a3;">pipx install telos-tracker</span> if you prefer.
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-
                     <!-- ─── 14 Days of Pro ─── -->
                     <tr>
-                        <td style="padding: 16px 24px 6px;" bgcolor="#0a0a0a">
+                        <td style="padding: 0 24px 6px;" bgcolor="#0a0a0a">
                             <p style="margin: 0; font-family: monospace; font-size: 11px; color: #525252; text-transform: uppercase; letter-spacing: 0.1em;">Your early access perk</p>
                         </td>
                     </tr>
@@ -202,6 +197,25 @@ function generateInvitationHTML(email) {
                         </td>
                     </tr>
 
+                    <!-- ─── Feedback CTA ─── -->
+                    <tr>
+                        <td style="padding: 16px 24px 8px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0; font-size: 15px; color: #d4d4d4; line-height: 1.7;">
+                                We're genuinely excited for you to try Telos. This is an early build and your feedback means everything to us&nbsp;&mdash;&nbsp;<strong style="color: #ededed;">just hit reply anytime</strong> and tell us what you think, what's broken, or what you wish it did. We read every single reply.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- ─── Sign off ─── -->
+                    <tr>
+                        <td style="padding: 16px 24px 8px;" bgcolor="#0a0a0a">
+                            <p style="margin: 0; font-size: 14px; color: #a3a3a3; line-height: 1.6;">
+                                Happy tracking,<br/>
+                                <span style="color: #ededed;">The Telos Team</span>
+                            </p>
+                        </td>
+                    </tr>
+
                     <!-- ─── Footer ─── -->
                     <tr>
                         <td style="padding: 28px 24px 16px; border-top: 1px solid #1a1a1a; text-align: center;" bgcolor="#0a0a0a">
@@ -209,11 +223,11 @@ function generateInvitationHTML(email) {
                                 <span style="color: #22c55e; font-weight: 600;">telos</span> &middot; know where your time goes
                             </p>
                             <p style="margin: 0; font-size: 11px; color: #404040; line-height: 1.8;">
-                                You're receiving this because you signed up at telos.dev.
+                                You're receiving this because you signed up at <a href="https://gen-lang-client-0772617718.web.app/" style="color: #525252; text-decoration: underline;">telos</a>.
                                 <br/>
-                                <a href="mailto:support@telos.dev?subject=Unsubscribe%20from%20invitations" style="color: #525252; text-decoration: underline;">Unsubscribe</a>
+                                <a href="mailto:anuragkurle27@gmail.com?subject=Unsubscribe%20from%20Telos%20invitations" style="color: #525252; text-decoration: underline;">Unsubscribe</a>
                                 &middot;
-                                <a href="https://telos.dev/privacy" style="color: #525252; text-decoration: underline;">Privacy Policy</a>
+                                <a href="https://gen-lang-client-0772617718.web.app/privacy" style="color: #525252; text-decoration: underline;">Privacy Policy</a>
                             </p>
                         </td>
                     </tr>
@@ -384,9 +398,9 @@ export async function sendInvitationEmail(recipientEmail) {
       name: 'Telos'
     },
     replyTo: 'anuragkurle27@gmail.com',
-    subject: "Where does your time actually go?",
+    subject: "Welcome to Telos — let's get you set up",
     html: generateInvitationHTML(recipientEmail),
-    text: `Your Telos access is ready.\n\nYou signed up for Telos, and we're ready for you.\n\nTelos maps your screen time, automatically. It runs quietly in the background, uses AI to understand what you're working on, and turns your day into a clear, searchable timeline. No manual logging. No browser extensions. Just clarity about where your hours actually go.\n\nScreenshots are analyzed in real-time and immediately deleted — only the insights stay.\n\nWHAT YOU'LL SEE\n- Your real patterns — deep work vs. meetings vs. browsing, by app and activity\n- Where your time drifts — context switches, rabbit holes, apps that quietly ate an hour\n- Answers on demand — "How much time did I spend coding today?" in plain English\n- A daily summary in your inbox — time breakdowns, focus scores, and insights\n\nGET STARTED\n  $ pip install telos-tracker\n  $ telos setup\n\nThat's it. Windows and macOS.\nDon't have Python? https://www.python.org/downloads/\n\n14 DAYS OF PRO, ON US\nBecause you signed up early, you get the full Pro experience — no credit card needed.\n- AI-powered activity tracking & timeline\n- Ask questions about your day in plain English\n- Daily email reports in your inbox\n- Data export (CSV & JSON)\n- Unlimited history retention\n\nABOUT PRICING\nEvery screen analysis is an AI call that costs money — servers, encryption, storage. Pro is $3/month after your 14 days.\n\nBut you don't have to pay. Bring your own Gemini API key (free from Google) and Telos runs entirely on your machine, forever. Get your key: https://aistudio.google.com/app/apikey\n\nAfter 14 days: keep Pro for $3/mo, switch to free BYOK, or stop. No card on file.\n\nWANT PRO WITHOUT PAYING?\nFind your referral link in Settings. Every friend who signs up = 1 month of Pro free (up to 12).\n\n— Telos\nhttps://telos.dev`,
+    text: `We're thrilled to have you on board!\n\nYour access is ready. To get started, open your command prompt or terminal and run:\n\n  pip install telos-tracker\n  telos setup\n\nThat's it — installs in 30 seconds. Works on Windows and macOS.\nDon't have Python? https://www.python.org/downloads/\n\nTelos maps your screen time, automatically. It runs quietly in the background, uses AI to understand what you're working on, and turns your day into a clear, searchable timeline. No manual logging. No browser extensions. Just clarity about where your hours actually go.\n\nScreenshots are analyzed in real-time and immediately deleted — only the insights stay.\n\nWHAT YOU'LL SEE\n- Your real patterns — deep work vs. meetings vs. browsing, by app and activity\n- Where your time drifts — context switches, rabbit holes, apps that quietly ate an hour\n- Answers on demand — "How much time did I spend coding today?" in plain English\n- A daily summary in your inbox — time breakdowns, focus scores, and insights\n\n14 DAYS OF PRO, ON US\nBecause you signed up early, you get the full Pro experience — no credit card needed.\n- AI-powered activity tracking & timeline\n- Ask questions about your day in plain English\n- Daily email reports in your inbox\n- Data export (CSV & JSON)\n- Unlimited history retention\n\nABOUT PRICING\nPro is $3/month after your 14 days. But you don't have to pay — bring your own Gemini API key (free from Google) and Telos runs on your machine forever. Get your key: https://aistudio.google.com/app/apikey\n\nWANT PRO WITHOUT PAYING?\nFind your referral link in Settings. Every friend who signs up = 1 month of Pro free (up to 12).\n\nWe're genuinely excited for you to try Telos. Just hit reply anytime and tell us what you think — we read every single reply.\n\nHappy tracking,\nThe Telos Team\nhttps://gen-lang-client-0772617718.web.app/`,
   };
 
   try {
