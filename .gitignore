@@ -94,3 +94,8 @@ docs/firebase-credentials.txt
 *-credentials.txt
 *-credentials.json
 service-account-key.json
+
+# Test environments
+test_install/
+client/test_v2/
+.telos_test/

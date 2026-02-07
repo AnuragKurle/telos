@@ -8,13 +8,11 @@ Telos is an AI-powered screen time tracker that captures screenshots, analyzes t
 
 ```
 telos/
-├── client/          Python TUI desktop application
-├── backend/         Node.js Express API (Cloud Run)
+├── client/          Python TUI desktop application (PyPI: telos-tracker)
+├── backend/         Node.js Express API (Google Cloud Run)
+├── website/         Next.js marketing site + admin dashboard (Firebase Hosting)
 ├── shared/          API contracts, types, constants
-├── website/         Next.js waitlist/marketing site
-├── docs/            Documentation
-├── functions/       Firebase Cloud Functions
-└── config.yaml      Root configuration
+└── docs/            Architecture, deployment, decisions
 ```
 
 ## Tech Stack

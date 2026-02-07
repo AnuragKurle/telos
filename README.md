@@ -14,9 +14,9 @@ This is a monorepo with three independent components:
 telos/
 ├── client/          # Python TUI app (pip install telos-tracker)
 ├── backend/         # Node.js API on Google Cloud Run
-├── website/         # Next.js marketing site + admin dashboard
-├── docs/            # Architecture, deployment, decisions
-└── shared/          # API contracts between client & backend
+├── website/         # Next.js marketing site + admin dashboard (Firebase Hosting)
+├── shared/          # API contracts, types, constants
+└── docs/            # Architecture, deployment, decisions
 ```
 
 ### client/ — The Product
