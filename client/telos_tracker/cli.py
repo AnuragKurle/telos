@@ -531,6 +531,50 @@ def run_doctor():
     return len(failures) == 0
 
 
+def _reset_onboarding_state(user_dir):
+    """Reset onboarding state so the user goes through onboarding again.
+
+    Called during reconfigure to ensure fresh name/email/auth/trial setup.
+    """
+    files_to_delete = [
+        user_dir / "onboarding_complete",
+        user_dir / "onboarding_state.json",
+        user_dir / ".getting_started_shown",
+    ]
+    for f in files_to_delete:
+        try:
+            if f.exists():
+                f.unlink()
+        except OSError:
+            pass
+
+    # Clear stale account/trial fields from config so onboarding starts fresh
+    config_path = user_dir / "config.yaml"
+    if config_path.exists():
+        try:
+            import yaml
+            config = yaml.safe_load(config_path.read_text()) or {}
+
+            # Reset account fields (onboarding will re-populate these)
+            account = config.get('account', {})
+            for key in ('name', 'email', 'status', 'upgraded_at', 'show_pro_welcome'):
+                account.pop(key, None)
+            config['account'] = account
+
+            # Reset trial dates
+            trial = config.get('trial', {})
+            for key in ('start_date', 'end_date'):
+                trial.pop(key, None)
+            config['trial'] = trial
+
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        except Exception:
+            pass  # Best effort; onboarding will overwrite anyway
+
+    print("[OK] Previous onboarding state cleared — you'll go through setup on next launch.")
+
+
 def interactive_setup():
     """Interactive setup wizard for first-time users."""
     print("=== Telos Setup ===\n")
@@ -544,8 +588,19 @@ def interactive_setup():
         if response != 'y':
             print("Setup cancelled.")
             return
+
+        # Reset onboarding state so the user goes through onboarding again
+        # after reconfiguring (name, email, Firebase auth, trial, etc.)
+        _reset_onboarding_state(user_dir)
+
+        # Delete old config so copy_default_config() creates a fresh template
+        # (prevents stale trial/account data from carrying over)
+        try:
+            config_path.unlink()
+        except OSError:
+            pass
     
-    # Create config from template
+    # Create config from template (fresh for reconfigure, new for first run)
     copy_default_config()
     copy_default_prompts()
     

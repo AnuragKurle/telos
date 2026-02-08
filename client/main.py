@@ -233,6 +233,22 @@ def show_stats():
         print(f"  {timestamp} - [{category}] {app}: {task}")
 
 
+def _has_essential_user_data(config) -> bool:
+    """Check whether the config contains essential user data set during onboarding.
+
+    Returns False if name or email are missing / still at their defaults,
+    which means onboarding was skipped or incomplete.
+    """
+    name = config.get('account', 'name', default='')
+    email = config.get('account', 'email', default='')
+
+    if not name or name == 'User':
+        return False
+    if not email or email in ('Not set', ''):
+        return False
+    return True
+
+
 def run_tui():
     """Run the interactive TUI application."""
     print("Loading TUI...")
@@ -275,6 +291,15 @@ def run_tui():
         run_onboarding(config, onboarding_mgr)
         
         # Check if onboarding was completed
+        if not onboarding_mgr.is_onboarding_complete():
+            print("Onboarding cancelled.")
+            return
+    elif not _has_essential_user_data(config):
+        # Onboarding flag exists but user data is missing/default — re-run
+        print("Incomplete profile detected - restarting onboarding...")
+        onboarding_mgr.reset()
+        run_onboarding(config, onboarding_mgr)
+        
         if not onboarding_mgr.is_onboarding_complete():
             print("Onboarding cancelled.")
             return
