@@ -279,11 +279,31 @@ class SummaryScreen(Screen):
             focus_blocks = []
 
         if focus_blocks:
-            focus_text = "\n".join(
-                f"  • {datetime.fromisoformat(b['start']).strftime('%H:%M')} - "
-                f"{b['duration_minutes']}min: {b['task'][:40]}"
-                for b in focus_blocks
-            )
+            # Build focus blocks text with validation to prevent crashes
+            valid_blocks = []
+            for b in focus_blocks:
+                try:
+                    # Validate required fields exist and have valid values
+                    if not isinstance(b, dict):
+                        continue
+                    if 'start' not in b or not b['start']:
+                        continue
+                    if 'duration_minutes' not in b:
+                        continue
+                    if 'task' not in b or b['task'] is None:
+                        continue
+                    
+                    # Parse and format the start time
+                    start_time = datetime.fromisoformat(b['start']).strftime('%H:%M')
+                    duration = b['duration_minutes']
+                    task = str(b['task'])[:40]  # Ensure it's a string before slicing
+                    
+                    valid_blocks.append(f"  • {start_time} - {duration}min: {task}")
+                except (ValueError, TypeError, KeyError) as e:
+                    # Skip malformed focus blocks silently
+                    continue
+            
+            focus_text = "\n".join(valid_blocks) if valid_blocks else "  None identified (sessions >30min with focus score ≥0.7)"
         else:
             focus_text = "  None identified (sessions >30min with focus score ≥0.7)"
 

@@ -13,6 +13,7 @@ from core.goal_manager import AnalysisGoalManager
 from tui.screens.goal_editor import GoalEditorModal
 from tui.screens.email_settings_modal import EmailSettingsModal
 from tui.screens.upgrade_modal import UpgradeModal
+from tui.screens.profile_editor import ProfileEditorModal
 from tui.feedback_mixin import FeedbackMixin
 
 
@@ -20,6 +21,7 @@ class SettingsScreen(FeedbackMixin, Screen):
     """Settings view with configuration."""
 
     BINDINGS = [
+        Binding("p", "edit_profile", "Edit Profile"),
         Binding("g", "edit_goals", "Edit Goals"),
         Binding("e", "edit_email", "Email Settings"),
         Binding("r", "show_referral", "Referral Link"),
@@ -128,6 +130,29 @@ class SettingsScreen(FeedbackMixin, Screen):
         self.title = "Settings"
         self.sub_title = "Configuration"
         self.refresh_display()
+
+    def action_edit_profile(self) -> None:
+        """Open profile editor to change name and email."""
+        current_name = self.app.config.get('account', 'name', default='')
+        current_email = self.app.config.get('account', 'email', default='')
+        
+        def handle_profile_update(result):
+            if result:
+                # Update config with new values
+                account_config = self.app.config.config.get('account', {})
+                account_config['name'] = result['name']
+                account_config['email'] = result['email']
+                self.app.config.config['account'] = account_config
+                self.app.config.save(self.app.config.config)
+                
+                # Refresh display and notify
+                self.refresh_display()
+                self.app.notify("Profile updated!", severity="success", timeout=3)
+        
+        self.app.push_screen(
+            ProfileEditorModal(current_name, current_email),
+            handle_profile_update
+        )
 
     def action_edit_goals(self) -> None:
         def on_goals_saved():

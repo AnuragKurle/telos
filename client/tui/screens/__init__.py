@@ -5,6 +5,7 @@ from .timeline import TimelineScreen
 from .summary import SummaryScreen
 from .settings import SettingsScreen
 from .goal_editor import GoalEditorModal
+from .profile_editor import ProfileEditorModal
 from .chat import ChatScreen
 from .welcome import WelcomeScreen
 from .welcome_carousel import WelcomeCarouselScreen
@@ -27,7 +28,8 @@ __all__ = [
     'TimelineScreen', 
     'SummaryScreen', 
     'SettingsScreen', 
-    'GoalEditorModal', 
+    'GoalEditorModal',
+    'ProfileEditorModal',
     'ChatScreen',
     'WelcomeScreen',
     'WelcomeCarouselScreen',
