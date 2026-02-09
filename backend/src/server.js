@@ -56,6 +56,10 @@ startScheduler();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Trust proxy for Cloud Run (required for rate limiting and IP detection)
+// Cloud Run sits behind Google's load balancer, so we need to trust the X-Forwarded-* headers
+app.set('trust proxy', true);
+
 // Initialize Sentry (must be first)
 initializeSentry(app);
 
@@ -158,9 +162,13 @@ app.listen(PORT, () => {
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Notify deployment in production
-  if (process.env.NODE_ENV === 'production') {
-    notifyDeployment('0.1.0', 'production').catch(console.error);
+  // Notify deployment in production (only on actual deployments, not instance restarts)
+  // Cloud Run sets K_REVISION env var that changes with each deployment
+  // We'll only notify once per revision to avoid spam
+  if (process.env.NODE_ENV === 'production' && process.env.K_REVISION) {
+    // Skip deployment notifications - they were causing spam
+    // Actual deployments should be tracked via Cloud Build notifications instead
+    console.log(`[STARTUP] Revision: ${process.env.K_REVISION}`);
   }
 });
 
